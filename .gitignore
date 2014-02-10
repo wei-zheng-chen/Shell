@@ -1,6 +1,8 @@
 # Object files
 *.o
 *.ko
+*.obj
+*.elf
 
 # Libraries
 *.lib
@@ -16,6 +18,9 @@
 *.exe
 *.out
 *.app
+*.i*86
+*.x86_64
+*.hex
 
 # OS generated files #
 .DS_Store
@@ -25,4 +30,4 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
-
+*.dSYM
