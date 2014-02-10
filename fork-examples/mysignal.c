@@ -1,7 +1,9 @@
 /* Sample program to handle signals */
 
+#include <stdlib.h>
 #include <signal.h>
 #include <stdio.h>
+#include <unistd.h>
 
 
 void * myhandler(int myint)
