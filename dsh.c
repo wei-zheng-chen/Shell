@@ -67,7 +67,15 @@ void spawn_job(job_t *j, bool fg) {
       case 0: /* child process  */
         p->pid = getpid();	    
         new_child(j, p, fg);
-            
+      
+        // We've established that the builtin commands are taken care of
+        // so here we need to check if that file exists 
+        //    if it does --> exec that file
+        //    if it doesn't --> log that it doesn't work
+
+        // To preform that job, take in process_t for compile and I/O reading
+
+
 	    /* YOUR CODE HERE?  Child-side code for new process. */
         perror("New child should have done an exec");
         exit(EXIT_FAILURE);  /* NOT REACHED */
