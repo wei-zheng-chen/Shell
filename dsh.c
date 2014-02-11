@@ -107,6 +107,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 
         if (!strcmp(argv[0], "quit")) {
             /* Your code here */
+
             exit(EXIT_SUCCESS);
 	}
         else if (!strcmp("jobs", argv[0])) {
@@ -133,8 +134,6 @@ char* promptmsg()
   char* promptMessage; 
 
   snprintf(str,50,"%s%ld%s", "dsh-",(long)getpid(),"$ ");
-  // printf("%s\n", str);
-
   promptMessage = str;
 	return promptMessage;
 }
@@ -143,13 +142,16 @@ int main()
 {
 
 	init_dsh();
+
 	DEBUG("Successfully initialized\n");
 
 	while(1) {
         job_t *j = NULL;
+
 		if(!(j = readcmdline(promptmsg()))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
 				fflush(stdout);
+
 				printf("\n");
 				exit(EXIT_SUCCESS);
            		}
@@ -168,5 +170,18 @@ int main()
             /* spawn_job(j,true) */
             /* else */
             /* spawn_job(j,false) */
+
+
+        while(j !=NULL){
+          int argc = j->first_process->argc;
+
+          char** argv = j->first_process->argv;
+          if(!builtin_cmd(j,argc,argv)){
+            printf("Getting a bloody Job");
+            spawn_job(j,!(j->bg)); 
+          }
+          j = j->next;
+        }
+
     }
 }
