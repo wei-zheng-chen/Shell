@@ -137,17 +137,18 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
         */
 
         if (!strcmp(argv[0], "quit")) {
-            /* Your code here */
-
             exit(EXIT_SUCCESS);
 	}
         else if (!strcmp("jobs", argv[0])) {
-            /* Your code here */
             printJobCollection();
             return true;
         }
 	else if (!strcmp("cd", argv[0])) {
-            /* Your code here */
+          if(argc <=1 || chdir(argv[1])==-1){
+            printf("cant do this bub\n");  // needs to be put in logger later
+          }
+           return true;
+
         }
         else if (!strcmp("bg", argv[0])) {
             /* Your code here */
