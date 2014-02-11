@@ -4,6 +4,8 @@ void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for t
 void continue_job(job_t *j); /* resume a stopped job */
 void spawn_job(job_t *j, bool fg); /* spawn a new job */
 
+job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
+
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p)
 {
@@ -94,6 +96,35 @@ void continue_job(job_t *j)
           perror("kill(SIGCONT)");
 }
 
+void printJobCollection(){
+  int jobCounter = 0;
+  char* promptMessage;  
+  char* jobStatus;
+
+  job_t* current;
+  current = headOfJobCollection;
+
+  if(current == NULL){
+    promptMessage = "there are currently no bloody jobs\n";
+    write(fileno(stdout),promptMessage,strlen(promptMessage));
+    return;
+  }
+
+  while(current!=NULL){
+
+    if(current ->notified){
+      jobStatus = "(Complete)";
+    }else{
+      jobStatus = "(Running)";
+    }
+
+    printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid,current->commandinfo,jobStatus);
+
+    current = current->next;
+    jobCounter ++;
+  }
+
+}
 
 /* 
  * builtin_cmd - If the user has typed a built-in command then execute
@@ -112,6 +143,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 	}
         else if (!strcmp("jobs", argv[0])) {
             /* Your code here */
+            printJobCollection();
             return true;
         }
 	else if (!strcmp("cd", argv[0])) {
@@ -138,12 +170,33 @@ char* promptmsg()
 	return promptMessage;
 }
 
+void addToJobCollection(job_t* lastJob){
+  if(headOfJobCollection == NULL){
+
+    headOfJobCollection = lastJob;
+
+  }else{
+
+    job_t* current;
+    current = headOfJobCollection;
+
+    while(current->next != NULL){
+      current = current->next;
+    }
+
+    current->next = lastJob;
+
+  }
+}
+
+
 int main() 
 {
 
 	init_dsh();
 
 	DEBUG("Successfully initialized\n");
+  headOfJobCollection = NULL;
 
 	while(1) {
         job_t *j = NULL;
@@ -160,7 +213,7 @@ int main()
 
         /* Only for debugging purposes to show parser output; turn off in the
          * final code */
-        if(PRINT_INFO) print_job(j);
+        // if(PRINT_INFO) print_job(j);
 
         /* Your code goes here */
         /* You need to loop through jobs list since a command line can contain ;*/
@@ -176,8 +229,10 @@ int main()
           int argc = j->first_process->argc;
 
           char** argv = j->first_process->argv;
+
           if(!builtin_cmd(j,argc,argv)){
-            printf("Getting a bloody Job");
+            printf("Getting a bloody Job\n");
+            addToJobCollection(j);
             spawn_job(j,!(j->bg)); 
           }
           j = j->next;
