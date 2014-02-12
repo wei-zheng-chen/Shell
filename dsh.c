@@ -77,8 +77,6 @@ void compiler(process_t *p){
 }
 
 
-
-
 /* Spawning a process with job control. fg is true if the 
  * newly-created process is to be placed in the foreground. 
  * (This implicitly puts the calling process in the background, 
@@ -117,9 +115,12 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = getpid();	    
         new_child(j, p, fg);
 
+        /* YOUR CODE HERE?  Child-side code for new process. */
+        
         // set up the programming environment!
         // do we need to open files, close descriptors, etc., etc.?
-
+        redirection(p);
+        
         // execvp to call child program
         execv(p->argv[0], p->argv[1]);
         
@@ -127,8 +128,7 @@ void spawn_job(job_t *j, bool fg) {
 
         // CHECK LOGGING SOMEWHERE!!
 
-	    /* YOUR CODE HERE?  Child-side code for new process. */
-        perror("New child should have done an exec");
+        // perror("New child should have done an exec"); <-- we did one!
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -138,7 +138,7 @@ void spawn_job(job_t *j, bool fg) {
         set_child_pgid(j, p);
 
         // parent waits until child completes
-        waitpid(pid);
+        waitpid(pid); // this returns status --> so log here?
 
         // now that child has completed, what shall we do?
         // check exit status (which means what?)
