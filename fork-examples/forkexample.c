@@ -1,7 +1,9 @@
 /* Example of use of fork system call */
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-main()
+int main()
 {
   int pid;
   

@@ -39,6 +39,41 @@ void new_child(job_t *j, process_t *p, bool fg)
          signal(SIGTTOU, SIG_DFL);
 }
 
+// I/O Redirection - Needs to be tested
+
+void input(process_t*p){
+  int fd = open(p->ifile, O_RDONLY);
+  if(fd!=-1){
+    dup2(fd,STDIN_FILENO);
+    close(fd);
+  }else{
+    printf("Cant open shit for inputting\n");
+  }
+}
+
+void output(process_t *p){
+  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, O_WRONLY);
+  if(fd!=-1){
+    dup2(fd, STDOUT_FILENO);
+    close(fd);
+  }else{
+    printf("Cant open shit for writing\n");
+  }
+
+}
+
+void redirection(process_t * p){
+  if(p->ifile != NULL){
+    input(p);
+  }
+  if(p->file != NULL){
+    output(p);
+  }
+
+}
+
+
+
 /* Spawning a process with job control. fg is true if the 
  * newly-created process is to be placed in the foreground. 
  * (This implicitly puts the calling process in the background, 
@@ -105,8 +140,8 @@ void printJobCollection(){
   current = headOfJobCollection;
 
   if(current == NULL){
-    promptMessage = "there are currently no bloody jobs\n";
-    write(fileno(stdout),promptMessage,strlen(promptMessage));
+    promptMessage = "there are currently no bloody jobs";
+    printf("%s\n", promptMessage);
     return;
   }
 
@@ -123,6 +158,9 @@ void printJobCollection(){
     current = current->next;
     jobCounter ++;
   }
+
+  //ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
+  //            THE JOB BANK. 
 
 }
 
