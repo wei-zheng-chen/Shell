@@ -251,7 +251,7 @@ void printMyJobProcess(process_t * p){
   printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
                                   p->stopped,p->status, p->ifile, p->ofile);
   for(int i =0; i < p->argc; i++){
-    printf("%d: %s\n",i,p->argv[i] );
+    printf("This is argv %d: %s\n",i,p->argv[i] );
   }
 
 }
