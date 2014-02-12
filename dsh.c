@@ -39,26 +39,24 @@ void new_child(job_t *j, process_t *p, bool fg) {
 }
 
 // I/O Redirection - Needs to be tested
-
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
-  if(fd!=-1){
-    dup2(fd,STDIN_FILENO);
+  if (fd != -1){
+    dup2(fd, STDIN_FILENO);
     close(fd);
-  }else{
-    printf("Cant open shit for inputting\n");
+  } else {
+    printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
   }
 }
 
 void output(process_t *p){
   int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, O_WRONLY);
-  if(fd!=-1){
+  if (fd != -1){
     dup2(fd, STDOUT_FILENO);
     close(fd);
-  }else{
+  } else {
     printf("Cant open shit for writing\n");
   }
-
 }
 
 void redirection(process_t * p){
@@ -68,7 +66,6 @@ void redirection(process_t * p){
   if(p->ofile != NULL){
     output(p);
   }
-
 }
 
 
@@ -78,6 +75,7 @@ void compiler(process_t *p){
 
 
 }
+
 
 
 
@@ -101,6 +99,13 @@ void spawn_job(job_t *j, bool fg) {
 	  /* YOUR CODE HERE? */
 	  /* Builtin commands are already taken care earlier */
 	  
+    // Three categories of jobs: single, jobs with I/O redirection, and pipelines
+    // if single, then job->mystdout set to outfile (then fork, parent waits)
+    // if pipeline, do ^^ but pay attention to stdout and stdin (before fork), 
+    //    using dup() and dup2()
+    // if redirection, use dup() and dup2() to copy over stdin and stdout
+    // use syscalls such as create(), open(), read(), write() to preform desired action
+
 	  switch (pid = fork()) {
 
       case -1: /* fork failure */
@@ -110,7 +115,9 @@ void spawn_job(job_t *j, bool fg) {
       case 0: /* child process  */
         p->pid = getpid();	    
         new_child(j, p, fg);
-      
+
+        execv(p->argv[0], p->argv[1]);
+        
         // We've established that the builtin commands are taken care of
         // so here we need to check if that file exists 
         //    if it does --> exec that file
@@ -128,6 +135,13 @@ void spawn_job(job_t *j, bool fg) {
         /* establish child process group */
         p->pid = pid;
         set_child_pgid(j, p);
+
+        // check what type of job this is!
+        
+
+        input(p);
+        output(p);
+        redirection(p);
 
         /* YOUR CODE HERE?  Parent-side code for new process.  */
     }
