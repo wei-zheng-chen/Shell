@@ -65,9 +65,17 @@ void redirection(process_t * p){
   if(p->ifile != NULL){
     input(p);
   }
-  if(p->file != NULL){
+  if(p->ofile != NULL){
     output(p);
   }
+
+}
+
+
+// for compiliing c programs
+void compiler(process_t *p){
+
+
 
 }
 
@@ -162,7 +170,7 @@ void printJobCollection(){
     current = current->next;
     jobCounter ++;
   }
-
+}
 
   //ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
   //            THE JOB BANK. 
@@ -235,6 +243,39 @@ void addToJobCollection(job_t* lastJob){
   }
 }
 
+//for know what the hell job it contains--------TESTING NOT IMPORTANT:
+void printMyJobProcess(process_t * p){
+  if(p == NULL){
+    return;
+  }
+  printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
+                                  p->stopped,p->status, p->ifile, p->ofile);
+  for(int i =0; i < p->argc; i++){
+    printf("%d: %s\n",i,p->argv[i] );
+  }
+
+}
+
+void printMyJob(job_t* j){
+  if(j == NULL){
+    return;
+  }
+  job_t * current;
+  current = j;
+
+  while(current!=NULL){
+    printf("This is the commandinfo: %s\n This is my pgid: %ld\n This is notified: %d\n This is mystdin: %d\n This is mystdout: %d\n This is mystderr: %d\n This is bg: %d\n",current->commandinfo,(long)current->pgid, current->notified,
+                              current->mystdin, current->mystdout, current->mystderr, current->bg);
+    if(current->first_process!=NULL){
+      printMyJobProcess(current->first_process);
+    }else{
+      printf("This job's first process is NULL");
+    }
+    current = current->next;
+  }
+}
+//-------------------------------------------------
+
 
 int main() {
 
@@ -274,6 +315,8 @@ int main() {
           int argc = j->first_process->argc;
 
           char** argv = j->first_process->argv;
+
+          printMyJob(j);
 
           if(!builtin_cmd(j,argc,argv)){
             printf("Getting a bloody Job\n");
