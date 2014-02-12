@@ -112,19 +112,20 @@ void spawn_job(job_t *j, bool fg) {
         perror("fork");
         exit(EXIT_FAILURE);
 
+
       case 0: /* child process  */
         p->pid = getpid();	    
         new_child(j, p, fg);
 
+        // set up the programming environment!
+        // do we need to open files, close descriptors, etc., etc.?
+
+        // execvp to call child program
         execv(p->argv[0], p->argv[1]);
         
-        // We've established that the builtin commands are taken care of
-        // so here we need to check if that file exists 
-        //    if it does --> exec that file
-        //    if it doesn't --> log that it doesn't work
+        // once child program completes, this case is done
 
-        // To preform that job, take in process_t for compile and I/O reading
-
+        // CHECK LOGGING SOMEWHERE!!
 
 	    /* YOUR CODE HERE?  Child-side code for new process. */
         perror("New child should have done an exec");
@@ -136,12 +137,12 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = pid;
         set_child_pgid(j, p);
 
-        // check what type of job this is!
-        
+        // parent waits until child completes
+        waitpid(pid);
 
-        input(p);
-        output(p);
-        redirection(p);
+        // now that child has completed, what shall we do?
+        // check exit status (which means what?)
+
 
         /* YOUR CODE HERE?  Parent-side code for new process.  */
     }
@@ -209,7 +210,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
       if(argc <=1 || chdir(argv[1])==-1){
-        printf("cant do this bub\n");  // needs to be put in logger later
+        printf("can't do this bub\n");  // needs to be put in logger later
       }
       return true;
   
