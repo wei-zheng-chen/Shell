@@ -50,7 +50,7 @@ void input(process_t*p){
 }
 
 void output(process_t *p){
-  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, O_WRONLY);
+  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY,S_IRWXU);
   if (fd != -1){
     dup2(fd, STDOUT_FILENO);
     close(fd);
