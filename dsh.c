@@ -122,13 +122,20 @@ void spawn_job(job_t *j, bool fg) {
         redirection(p);
         
         // execvp to call child program
-        execv(p->argv[0], p->argv[1]);
+        printf("about to execute my child program!\n");
+        printf("argv[0]: %s\n", p->argv[0]);
+        char * envp[] = { NULL };
+
+        execve(p->argv[0], &p->argv[1], envp);
         
+        printf("I shouldn't print ever\n");
+
         // once child program completes, this case is done
 
         // CHECK LOGGING SOMEWHERE!!
 
         // perror("New child should have done an exec"); <-- we did one!
+
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -137,14 +144,29 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = pid;
         set_child_pgid(j, p);
 
-        // parent waits until child completes
-        waitpid(pid); // this returns status --> so log here?
+      /* YOUR CODE HERE?  Parent-side code for new process.  */
 
+        // parent waits until child completes
+        printf("I'm about to wait on my child\n");
+
+        int status = 0;
+
+        if (waitpid(pid, &status, 0) < 0){
+          perror("waitpid");
+          exit(EXIT_FAILURE);
+        }
+
+        printf("I am done waiting for my child\n");
+        
         // now that child has completed, what shall we do?
         // check exit status (which means what?)
 
+        if(WIFEXITED(status)){
+          exit(WEXITSTATUS(status));
+        }
 
-        /* YOUR CODE HERE?  Parent-side code for new process.  */
+        exit(EXIT_FAILURE);
+        
     }
 
     /* YOUR CODE HERE?  Parent-side code for new job.*/
@@ -265,9 +287,9 @@ void printMyJobProcess(process_t * p){
   }
   printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
                                   p->stopped,p->status, p->ifile, p->ofile);
-  for(int i =0; i < p->argc; i++){
-    printf("%d: %s\n",i,p->argv[i] );
-  }
+  //for(int i =0; i < p->argc; i++){
+    //printf("%d: %s\n",i,p->argv[i] );
+  //}
 
 }
 
