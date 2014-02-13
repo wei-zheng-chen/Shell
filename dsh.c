@@ -399,10 +399,10 @@ int main() {
 
           char** argv = j->first_process->argv;
 
-          printMyJob(j);
+          // printMyJob(j);
 
           if(!builtin_cmd(j,argc,argv)){
-            printf("Getting a bloody Job\n");
+            // printf("Getting a bloody Job\n");
             addToJobCollection(j);
             spawn_job(j,!(j->bg)); 
           }
