@@ -38,7 +38,7 @@ void new_child(job_t *j, process_t *p, bool fg) {
   signal(SIGTTOU, SIG_DFL);
 }
 
-// I/O Redirection - Needs to be tested
+// I/O Redirection - Works
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
@@ -71,13 +71,52 @@ void redirection(process_t * p){
 
 // for compiliing c programs
 void compiler(process_t *p){
+  int status =0;
+  pid_t pid;
 
-char* fileName;
-fileName = p->argv[0];
-printf("this is my filename: %s\n", fileName);
+  char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
+  memcpy(compileFileName, p->argv[0],(strlen(p->argv[0])-2));
+  compileFileName[(strlen(p->argv[0])-2)] ='\0';
 
+  // printf("this is my filename: %s This is it's size: %lu\n", p->argv[0],strlen(p->argv[0])-2);
+  // printf("this is my compilefilename: %s\n ",compileFileName);
 
+  //built up the gcc argument stuff
+  char **gccArgs = (char**)malloc(sizeof(char*)*5);
+  gccArgs[0] = "gcc";
+  gccArgs[1] = "-o";
+  gccArgs[2] = compileFileName;
+  gccArgs[3] = p->argv[0];
+  gccArgs[4] = '\0';
 
+  switch (pid = fork()){
+    case -1:
+      printf("FORK ERRORRRRRRR!!!\n");
+
+    case 0:
+      execv("/usr/bin/gcc",gccArgs);
+
+    default:
+      if (waitpid(pid, &status, 0) < 0){
+          printf("My error is from the parent waiting\n");
+          perror("waitpid");
+          exit(EXIT_FAILURE);
+        }
+        // now that child has completed, what shall we do?
+
+        // check exit status (which means what?)
+      if(WIFEXITED(status)){
+          // something with exit status here?
+          printf("My error code is: %s\n", strerror(errno));
+          // I really don't understand what this does ^^^^^
+      }
+     
+  }
+   sprintf(p->argv[0], "./%s", compileFileName);
+    printf("this is my new filename: %s\n", p->argv[0]);
+
+      free(compileFileName);
+      free(gccArgs);
 
 }
 
