@@ -72,6 +72,11 @@ void redirection(process_t * p){
 // for compiliing c programs
 void compiler(process_t *p){
 
+char* fileName;
+fileName = p->argv[0];
+printf("this is my filename: %s\n", fileName);
+
+
 
 
 }
@@ -116,7 +121,7 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = getpid();	    
         new_child(j, p, fg);
 
-        execv(p->argv[0], p->argv[1]);
+        // execv(p->argv[0], p->argv[1]);
         
         // We've established that the builtin commands are taken care of
         // so here we need to check if that file exists 
@@ -138,7 +143,7 @@ void spawn_job(job_t *j, bool fg) {
 
         // check what type of job this is!
         
-
+        compiler(p);
         input(p);
         output(p);
         redirection(p);
@@ -262,11 +267,17 @@ void printMyJobProcess(process_t * p){
   if(p == NULL){
     return;
   }
-  printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
+  while(p != NULL){
+    printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
                                   p->stopped,p->status, p->ifile, p->ofile);
-  for(int i =0; i < p->argc; i++){
-    printf("This is argv %d: %s\n",i,p->argv[i] );
+    for(int i =0; i < p->argc; i++){
+      printf("This is argv %d: %s\n",i,p->argv[i] );
+    }
+
+    p = p->next;
+
   }
+
 
 }
 
