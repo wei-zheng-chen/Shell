@@ -89,6 +89,7 @@ void compiler(process_t *p){
   gccArgs[3] = p->argv[0];
   gccArgs[4] = '\0';
 
+  //do the fork stuff, similar to the fork thingy in spawn_job
   switch (pid = fork()){
     case -1:
       printf("FORK ERRORRRRRRR!!!\n");
@@ -112,11 +113,12 @@ void compiler(process_t *p){
       }
      
   }
-   sprintf(p->argv[0], "./%s", compileFileName);
-    printf("this is my new filename: %s\n", p->argv[0]);
+  //put the executable files back in to argv[0] AKA replacing the "file.c"
+  sprintf(p->argv[0], "./%s", compileFileName);
+  printf("this is my new filename: %s\n", p->argv[0]);
 
-      free(compileFileName);
-      free(gccArgs);
+  free(compileFileName);
+  free(gccArgs);
 
 }
 
@@ -165,6 +167,7 @@ void spawn_job(job_t *j, bool fg) {
         if (strstr(p->argv[0], ".c") != NULL){
           printf("will be compiled elsewhere\n");
           compiler(p);
+          execvp(p->argv[0], p->argv);
 
         } else {
           // otherwise... execvp to call child program
