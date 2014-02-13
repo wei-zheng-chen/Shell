@@ -92,17 +92,16 @@ void spawn_job(job_t *j, bool fg) {
 	pid_t pid;
 	process_t *p;
 
-	for(p = j->first_process; p; p = p->next) {
+  /* Builtin commands are already taken care earlier */
 
-	  /* YOUR CODE HERE? */
-	  /* Builtin commands are already taken care earlier */
-	  
-    // Three categories of jobs: single, jobs with I/O redirection, and pipelines
-    // if single, then job->mystdout set to outfile (then fork, parent waits)
-    // if pipeline, do ^^ but pay attention to stdout and stdin (before fork), 
-    //    using dup() and dup2()
-    // if redirection, use dup() and dup2() to copy over stdin and stdout
-    // use syscalls such as create(), open(), read(), write() to preform desired action
+  // loops through each item in the pipeline
+	for(p = j->first_process; p; p = p->next) {
+    
+    // do we need to create a pipe?
+    if(p->next != NULL){
+      int fd[2];
+      pipe(fd);
+    }
 
 	  switch (pid = fork()) {
 
@@ -110,31 +109,29 @@ void spawn_job(job_t *j, bool fg) {
         perror("fork");
         exit(EXIT_FAILURE);
 
-
       case 0: /* child process  */
         p->pid = getpid();	    
         new_child(j, p, fg);
-
-        /* YOUR CODE HERE?  Child-side code for new process. */
         
         // set up the programming environment!
         // do we need to open files, close descriptors, etc., etc.?
         redirection(p);
         
-        // execvp to call child program
-        printf("about to execute my child program!\n");
-        printf("argv[0]: %s\n", p->argv[0]);
-        char * envp[] = { NULL };
+        // check if argv[0] is a c file and needs to be compiled separately
+        if (strstr(p->argv[0], ".c") != NULL){
+          printf("will be compiled elsewhere\n");
+          compiler(p);
 
-        execve(p->argv[0], &p->argv[1], envp);
-        
-        printf("I shouldn't print ever\n");
+        } else {
+          // otherwise... execvp to call child program
+          execvp(p->argv[0], p->argv);
+        }
+
+        // let's debug why it didn't work...
+        printf("My error code is: %s\n", strerror(errno));
 
         // once child program completes, this case is done
-
-        // CHECK LOGGING SOMEWHERE!!
-
-        // perror("New child should have done an exec"); <-- we did one!
+        // CHECK LOGGING SOMEWHERE!! (but actually...)
 
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
@@ -144,14 +141,12 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = pid;
         set_child_pgid(j, p);
 
-      /* YOUR CODE HERE?  Parent-side code for new process.  */
-
         // parent waits until child completes
         printf("I'm about to wait on my child\n");
 
         int status = 0;
-
         if (waitpid(pid, &status, 0) < 0){
+          printf("My error is from the parent waiting\n");
           perror("waitpid");
           exit(EXIT_FAILURE);
         }
@@ -159,14 +154,13 @@ void spawn_job(job_t *j, bool fg) {
         printf("I am done waiting for my child\n");
         
         // now that child has completed, what shall we do?
+
         // check exit status (which means what?)
-
         if(WIFEXITED(status)){
-          exit(WEXITSTATUS(status));
+          // something with exit status here?
+          printf("My error code is: %s\n", strerror(errno));
+          // I really don't understand what this does ^^^^^
         }
-
-        exit(EXIT_FAILURE);
-        
     }
 
     /* YOUR CODE HERE?  Parent-side code for new job.*/
