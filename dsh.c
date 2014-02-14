@@ -195,7 +195,7 @@ void single_process(job_t *j, bool fg){
         // }
   }
 
-  free(j);
+  free_job(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
@@ -239,6 +239,8 @@ void pipeline_process(job_t *j, bool fg){
 
         // set up pipeline based on location
 
+        // how to add the redirection here? (is there redirection?)
+
         // First process
         if (p == j->first_process){
           dup2(pipes[1], 1); // write to the pipeline
@@ -278,6 +280,9 @@ void pipeline_process(job_t *j, bool fg){
         set_child_pgid(j, p);
 
         // want parent to continue the loop to fork again
+        // deal with tty here?
+        seize_tty(getpid()); // assign the terminal back to dsh
+
         break;
 
         // parent waits until all child complete
@@ -286,8 +291,7 @@ void pipeline_process(job_t *j, bool fg){
     }
   }
   // where should this be located?
-  free(j);
-  seize_tty(getpid()); // assign the terminal back to dsh
+  free_job(j);
 }
 
 void spawn_job(job_t *j, bool fg){
@@ -335,7 +339,7 @@ void printJobCollection(){
 }
 
 //ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
-//           THE JOB BANK. 
+//           THE JOB BANK (somewhat done)
 
 /* 
  * builtin_cmd - If the user has typed a built-in command then execute
@@ -350,7 +354,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
     printJobCollection();
-    free(last_job);
+    free_job(last_job);
     return true;
 
   // Are we changing directories?
@@ -360,7 +364,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
       logError("Improper use of cd\n");
     }
 
-    free(last_job);
+    free_job(last_job);
     return true;
   
   // Should it run in the background?
@@ -447,6 +451,7 @@ void printMyJob(job_t* j){
 int main() {
 
 	init_dsh();
+  // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
 
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
