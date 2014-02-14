@@ -44,6 +44,15 @@ void new_child(job_t *j, process_t *p, bool fg) {
   signal(SIGTTOU, SIG_DFL);
 }
 
+//Error logging
+
+void logError(char* text) {
+  //store completed entry in log
+  FILE* logfile = fopen("dsh.log", "a");
+  fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
+  fclose(logfile);
+}
+
 // I/O Redirection - Works
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
@@ -51,17 +60,19 @@ void input(process_t*p){
     dup2(fd, STDIN_FILENO);
     close(fd);
   } else {
-    printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
+    //printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
+    logError("Cant open shit for inputting\n");
   }
 }
 
 void output(process_t *p){
-  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY,S_IRWXU);
+  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
   if (fd != -1){
     dup2(fd, STDOUT_FILENO);
     close(fd);
   } else {
-    printf("Cant open shit for writing\n");
+    //printf("Cant open shit for writing\n"); 
+    logError("Cant open shit for writing\n");
   }
 }
 
@@ -140,6 +151,62 @@ void compiler(process_t *p){
  * subsequent processes in a pipeline.
  * */
 
+void single_process(job_t *j, bool fg){
+
+  pid_t pid;
+  process_t *p = j->first_process;
+
+  switch (pid = fork()) {
+
+    case -1: /* fork failure */
+        perror("fork");
+        exit(EXIT_FAILURE);
+
+    case 0: /* child process  */
+        p->pid = getpid();      
+        new_child(j, p, fg);
+        
+        // set up the programming environment!
+        redirection(p);
+        
+        // check if argv[0] is a c file 
+        if (strstr(p->argv[0], ".c") != NULL){
+          compiler(p);
+        }
+
+        // execute the file
+        execvp(p->argv[0], p->argv);
+        
+        // let's debug why it didn't work...
+        printf("My error code is: %s\n", strerror(errno));
+
+        // once child program completes, this case is done
+        exit(EXIT_FAILURE);  /* NOT REACHED */
+        break;    /* NOT REACHED */
+
+    default: /* parent */
+        /* establish child process group */
+        p->pid = pid;
+        set_child_pgid(j, p);
+
+        int status = 0;
+        if (waitpid(pid, &status, 0) < 0){
+          perror("waitpid");
+          exit(EXIT_FAILURE);
+        }
+        
+        // check exit status (which means what?)
+        if(WIFEXITED(status)){
+          // something with exit status here?
+          printf("My error code is: %s\n", strerror(errno));
+          // I really don't understand what this does ^^^^^
+        }
+  }
+
+  free(j);
+  seize_tty(getpid()); // assign the terminal back to dsh
+}
+
 void spawn_job(job_t *j, bool fg) {
 
 	pid_t pid;
@@ -147,15 +214,23 @@ void spawn_job(job_t *j, bool fg) {
 
   /* Builtin commands are already taken care earlier */
 
+  // Do we need to create a pipeline?
+  if (j->first_process->next == NULL){
+    single_process(j, fg);
+    return;
+  }
+
+  int count = 0;
+
+  // How long is our pipeline? --> count
   // loops through each item in the pipeline
 	for(p = j->first_process; p; p = p->next) {
     
-    // do we need to create a pipe?
-    if(p->next != NULL){
-      int fd[2];
-      pipe(fd);
-    }
+    count++;
 
+    int fd[2];
+    pipe(fd);
+    
 	  switch (pid = fork()) {
 
       case -1: /* fork failure */
@@ -166,27 +241,23 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = getpid();	    
         new_child(j, p, fg);
         
-        // set up the programming environment!
-        // do we need to open files, close descriptors, etc., etc.?
-        redirection(p);
-        
-        // check if argv[0] is a c file and needs to be compiled separately
-        if (strstr(p->argv[0], ".c") != NULL){
-          printf("will be compiled elsewhere\n");
-          compiler(p);
-          execvp(p->argv[0], p->argv);
+        // First process
+        if (p == j->first_process){
+          printf("Child (%d): %d\n", count, getpid());
 
+
+        // Last process
+        } else if (p->next == NULL){
+          printf("Child (%d): %d\n", count, getpid());
+
+
+        // Middle process
         } else {
-          // otherwise... execvp to call child program
-          execvp(p->argv[0], p->argv);
+          printf("Child (%d): %d\n", count, getpid());
+
+
         }
-
-        // let's debug why it didn't work...
-        printf("My error code is: %s\n", strerror(errno));
-
-        // once child program completes, this case is done
-        // CHECK LOGGING SOMEWHERE!! (but actually...)
-
+        
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -196,25 +267,8 @@ void spawn_job(job_t *j, bool fg) {
         set_child_pgid(j, p);
 
         // parent waits until child completes
-        printf("I'm about to wait on my child\n");
-
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0){
-          printf("My error is from the parent waiting\n");
-          perror("waitpid");
-          exit(EXIT_FAILURE);
-        }
-
-        printf("I am done waiting for my child\n");
+        wait(NULL);
         
-        // now that child has completed, what shall we do?
-
-        // check exit status (which means what?)
-        if(WIFEXITED(status)){
-          // something with exit status here?
-          printf("My error code is: %s\n", strerror(errno));
-          // I really don't understand what this does ^^^^^
-        }
     }
 
     /* YOUR CODE HERE?  Parent-side code for new job.*/
@@ -284,7 +338,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
       if(argc <=1 || chdir(argv[1])==-1){
-        printf("can't do this bub\n");  // needs to be put in logger later
+        logError("can't do this bub\n");  // needs to be put in logger later
       }
       return true;
   
@@ -340,9 +394,9 @@ void printMyJobProcess(process_t * p){
   while(p != NULL){
     printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
                                   p->stopped,p->status, p->ifile, p->ofile);
-    for(int i =0; i < p->argc; i++){
-      printf("This is argv %d: %s\n",i,p->argv[i] );
-    }
+    // for(int i =0; i < p->argc; i++){
+    //   printf("This is argv %d: %s\n",i,p->argv[i] );
+    // }
 
     p = p->next;
 
