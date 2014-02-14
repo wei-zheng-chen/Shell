@@ -50,7 +50,7 @@ void input(process_t*p){
 }
 
 void output(process_t *p){
-  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY,S_IRWXU);
+  int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
   if (fd != -1){
     dup2(fd, STDOUT_FILENO);
     close(fd);
@@ -133,6 +133,62 @@ void compiler(process_t *p){
  * subsequent processes in a pipeline.
  * */
 
+void single_process(job_t *j, bool fg){
+
+  pid_t pid;
+  process_t *p = j->first_process;
+
+  switch (pid = fork()) {
+
+    case -1: /* fork failure */
+        perror("fork");
+        exit(EXIT_FAILURE);
+
+    case 0: /* child process  */
+        p->pid = getpid();      
+        new_child(j, p, fg);
+        
+        // set up the programming environment!
+        redirection(p);
+        
+        // check if argv[0] is a c file 
+        if (strstr(p->argv[0], ".c") != NULL){
+          compiler(p);
+        }
+
+        // execute the file
+        execvp(p->argv[0], p->argv);
+        
+        // let's debug why it didn't work...
+        printf("My error code is: %s\n", strerror(errno));
+
+        // once child program completes, this case is done
+        exit(EXIT_FAILURE);  /* NOT REACHED */
+        break;    /* NOT REACHED */
+
+    default: /* parent */
+        /* establish child process group */
+        p->pid = pid;
+        set_child_pgid(j, p);
+
+        int status = 0;
+        if (waitpid(pid, &status, 0) < 0){
+          perror("waitpid");
+          exit(EXIT_FAILURE);
+        }
+        
+        // check exit status (which means what?)
+        if(WIFEXITED(status)){
+          // something with exit status here?
+          printf("My error code is: %s\n", strerror(errno));
+          // I really don't understand what this does ^^^^^
+        }
+  }
+  
+  free(j);
+  seize_tty(getpid()); // assign the terminal back to dsh
+}
+
 void spawn_job(job_t *j, bool fg) {
 
 	pid_t pid;
@@ -140,15 +196,22 @@ void spawn_job(job_t *j, bool fg) {
 
   /* Builtin commands are already taken care earlier */
 
+  // Do we need to create a pipeline?
+  if (j->first_process->next == NULL){
+    single_process(j, fg);
+    return;
+  }
+
+  int count = 0;
+
   // loops through each item in the pipeline
 	for(p = j->first_process; p; p = p->next) {
     
-    // do we need to create a pipe?
-    if(p->next != NULL){
-      int fd[2];
-      pipe(fd);
-    }
+    count++;
 
+    int fd[2];
+    pipe(fd);
+    
 	  switch (pid = fork()) {
 
       case -1: /* fork failure */
@@ -329,9 +392,9 @@ void printMyJobProcess(process_t * p){
   while(p != NULL){
     printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
                                   p->stopped,p->status, p->ifile, p->ofile);
-    for(int i =0; i < p->argc; i++){
-      printf("This is argv %d: %s\n",i,p->argv[i] );
-    }
+    // for(int i =0; i < p->argc; i++){
+    //   printf("This is argv %d: %s\n",i,p->argv[i] );
+    // }
 
     p = p->next;
 
