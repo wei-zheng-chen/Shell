@@ -184,7 +184,7 @@ void single_process(job_t *j, bool fg){
           // I really don't understand what this does ^^^^^
         }
   }
-  
+
   free(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
@@ -204,6 +204,7 @@ void spawn_job(job_t *j, bool fg) {
 
   int count = 0;
 
+  // How long is our pipeline? --> count
   // loops through each item in the pipeline
 	for(p = j->first_process; p; p = p->next) {
     
@@ -222,27 +223,23 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = getpid();	    
         new_child(j, p, fg);
         
-        // set up the programming environment!
-        // do we need to open files, close descriptors, etc., etc.?
-        redirection(p);
-        
-        // check if argv[0] is a c file and needs to be compiled separately
-        if (strstr(p->argv[0], ".c") != NULL){
-          printf("will be compiled elsewhere\n");
-          compiler(p);
-          execvp(p->argv[0], p->argv);
+        // First process
+        if (p == j->first_process){
+          printf("Child (%d): %d\n", count, getpid());
 
+
+        // Last process
+        } else if (p->next == NULL){
+          printf("Child (%d): %d\n", count, getpid());
+
+
+        // Middle process
         } else {
-          // otherwise... execvp to call child program
-          execvp(p->argv[0], p->argv);
+          printf("Child (%d): %d\n", count, getpid());
+
+
         }
-
-        // let's debug why it didn't work...
-        printf("My error code is: %s\n", strerror(errno));
-
-        // once child program completes, this case is done
-        // CHECK LOGGING SOMEWHERE!! (but actually...)
-
+        
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -252,25 +249,8 @@ void spawn_job(job_t *j, bool fg) {
         set_child_pgid(j, p);
 
         // parent waits until child completes
-        printf("I'm about to wait on my child\n");
-
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0){
-          printf("My error is from the parent waiting\n");
-          perror("waitpid");
-          exit(EXIT_FAILURE);
-        }
-
-        printf("I am done waiting for my child\n");
+        wait(NULL);
         
-        // now that child has completed, what shall we do?
-
-        // check exit status (which means what?)
-        if(WIFEXITED(status)){
-          // something with exit status here?
-          printf("My error code is: %s\n", strerror(errno));
-          // I really don't understand what this does ^^^^^
-        }
     }
 
     /* YOUR CODE HERE?  Parent-side code for new job.*/
