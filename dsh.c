@@ -164,7 +164,7 @@ void single_process(job_t *j, bool fg){
         execvp(p->argv[0], p->argv);
         
         // let's debug why it didn't work...
-        printf("My error code is: %s\n", strerror(errno));
+        // printf("My error code is: %s\n", strerror(errno));
 
         // once child program completes, this case is done
         exit(EXIT_FAILURE);  /* NOT REACHED */
@@ -182,6 +182,7 @@ void single_process(job_t *j, bool fg){
         }
         
         // check exit status (which means what?)
+        // ATTENTION: does this need to be logged?
         if(WIFEXITED(status)){
           // something with exit status here?
           printf("My error code is: %s\n", strerror(errno));
@@ -193,69 +194,66 @@ void single_process(job_t *j, bool fg){
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
-void spawn_job(job_t *j, bool fg) {
+void pipeline_process(job_t *j, bool fg){
+ 
+  pid_t pid;
+  process_t *p;
 
-	pid_t pid;
-	process_t *p;
-
-  /* Builtin commands are already taken care earlier */
-
-  // Do we need to create a pipeline?
-  if (j->first_process->next == NULL){
-    single_process(j, fg);
-    return;
-  }
-
-  int n = -1; // counts how many processes are in the pipeline
+  // counts number of pipes needed; there will be numPipes+1 total processes
+  int numPipes = -1; 
 
   for(p = j->first_process; p; p = p->next) {
-    n++;
+    numPipes++;
   }
 
   // now we need to make n pipes
-  int pipes[n*2]; // each pipe needs 2 fds
+  int pipes[numPipes*2]; // each pipe needs 2 fds
   int i = 0;
-  
-  while(i++ < n){
+
+  while(i++ < numPipes){
     pipe(pipes + 2*i);
   }
 
   // now let's loop to fork the children
-  int count = 0;
-  for(p = j->first_process; p; p = p->next){
-    count++;
-
-    // will be different pipeline situation depending on location
-
-    if (fork() == 0){
-      dup2(pipes[count], count);
-      //close();
-    }
-
-  }  
-
-
+  int numProcess = 0;
 
   // loops through each item in the pipeline
-	for(p = j->first_process; p; p = p->next) {
-    
-    int fd[2];
-    pipe(fd);
-    
-	  switch (pid = fork()) {
+  for(p = j->first_process; p; p = p->next){
+    numProcess++; // which number process are we on?
 
-      case -1: /* fork failure */
-        perror("fork");
+    // will be different pipeline situation depending on location
+    switch (pid = fork()){
+
+      case -1: // Fork failed
+        perror("fork in pipeline");
         exit(EXIT_FAILURE);
 
-      case 0: /* child process  */
-        p->pid = getpid();	    
+      case 0: // Child process
+        p->pid = getpid(); // Should this be updated for group ids?
         new_child(j, p, fg);
-        
-        close(0);
-        close(fd[1]);
-        dup2(0, fd[0]);
-        close(0);
+
+        // set up pipeline based on location
+
+        // First process
+        if (p == j->first_process){
+          dup2(pipes[1], 1); // write to the pipeline
+
+        // Last process
+        } else if (p->next == NULL){
+          dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
+
+        // Middle process
+        } else {
+          dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
+          dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
+        }
+
+        // close pipelines
+        int i = 0;
+        int n = 2*numPipes; // number of pipe ends
+        while (i++ < n){
+          close(pipes[i]);
+        }
 
         // check if argv[0] is a c file 
         if (strstr(p->argv[0], ".c") != NULL){
@@ -264,48 +262,36 @@ void spawn_job(job_t *j, bool fg) {
 
         // execute the file
         execvp(p->argv[0], p->argv);
-
-        // // First process
-        // if (p == j->first_process){
-        //   printf("Child (%d): %d\n", count, getpid());
-
-
-        // // Last process
-        // } else if (p->next == NULL){
-        //   printf("Child (%d): %d\n", count, getpid());
-
-
-        // // Middle process
-        // } else {
-        //   printf("Child (%d): %d\n", count, getpid());
-
-
-        // }
         
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
-      default: /* parent */
-        /* establish child process group */
+      default: // Parent process
+        
+        // establish child process group (how?)
         p->pid = pid;
         set_child_pgid(j, p);
 
-        int status;
+        // want parent to continue the loop to fork again
+        break;
 
-        close(fd[0]);
-
-        // parent waits until child completes
-        waitpid(pid, &status, 0);
-        
+        // parent waits until all child complete
+        // not sure where to write the wait?
+        wait(NULL);
     }
+  }
+  // where should this be located?
+  free(j);
+  seize_tty(getpid()); // assign the terminal back to dsh
+}
 
-    /* YOUR CODE HERE?  Parent-side code for new job.*/
-
-    //close(p); // is this right? <--- no, it's not
-              // shit I don't remember what this line was
-
-	  seize_tty(getpid()); // assign the terminal back to dsh
-	}
+void spawn_job(job_t *j, bool fg){
+  // Builtin commands are already taken care earlier
+  if (j->first_process->next == NULL){
+    single_process(j, fg);
+  } else {
+    pipeline_process(j, fg);
+  }
 }
 
 /* Sends SIGCONT signal to wake up the blocked job */
