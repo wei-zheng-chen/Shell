@@ -38,13 +38,12 @@ void new_child(job_t *j, process_t *p, bool fg) {
   signal(SIGTTOU, SIG_DFL);
 }
 
-//Error logging
-
+// Error logging
 void logError(char* text) {
-  //store completed entry in log
-  FILE* logfile = fopen("dsh.log", "a");
-  fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
-  fclose(logfile);
+   //store completed entry in log
+   FILE* logfile = fopen("dsh.log", "a");
+   fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
+   fclose(logfile);
 }
 
 // I/O Redirection - Works
@@ -54,8 +53,7 @@ void input(process_t*p){
     dup2(fd, STDIN_FILENO);
     close(fd);
   } else {
-    //printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
-    logError("Cant open shit for inputting\n");
+    logError("Can't open shit for inputting\n"); // oh what pleasant notes
   }
 }
 
@@ -65,7 +63,6 @@ void output(process_t *p){
     dup2(fd, STDOUT_FILENO);
     close(fd);
   } else {
-    //printf("Cant open shit for writing\n"); 
     logError("Cant open shit for writing\n");
   }
 }
@@ -78,7 +75,6 @@ void redirection(process_t * p){
     output(p);
   }
 }
-
 
 // for compiliing c programs
 void compiler(process_t *p){
@@ -130,9 +126,7 @@ void compiler(process_t *p){
 
   free(compileFileName);
   free(gccArgs);
-
 }
-
 
 /* Spawning a process with job control. fg is true if the 
  * newly-created process is to be placed in the foreground. 
@@ -143,7 +137,6 @@ void compiler(process_t *p){
  * pgid: this feature is used to start the second or 
  * subsequent processes in a pipeline.
  * */
-
 void single_process(job_t *j, bool fg){
 
   pid_t pid;
@@ -213,14 +206,39 @@ void spawn_job(job_t *j, bool fg) {
     return;
   }
 
-  int count = 0;
+  int n = -1; // counts how many processes are in the pipeline
 
-  // How long is our pipeline? --> count
+  for(p = j->first_process; p; p = p->next) {
+    n++;
+  }
+
+  // now we need to make n pipes
+  int pipes[n*2]; // each pipe needs 2 fds
+  int i = 0;
+  
+  while(i++ < n){
+    pipe(pipes + 2*i);
+  }
+
+  // now let's loop to fork the children
+  int count = 0;
+  for(p = j->first_process; p; p = p->next){
+    count++;
+
+    // will be different pipeline situation depending on location
+
+    if (fork() == 0){
+      dup2(pipes[count], count);
+      //close();
+    }
+
+  }  
+
+
+
   // loops through each item in the pipeline
 	for(p = j->first_process; p; p = p->next) {
     
-    count++;
-
     int fd[2];
     pipe(fd);
     
@@ -234,22 +252,35 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = getpid();	    
         new_child(j, p, fg);
         
-        // First process
-        if (p == j->first_process){
-          printf("Child (%d): %d\n", count, getpid());
+        close(0);
+        close(fd[1]);
+        dup2(0, fd[0]);
+        close(0);
 
-
-        // Last process
-        } else if (p->next == NULL){
-          printf("Child (%d): %d\n", count, getpid());
-
-
-        // Middle process
-        } else {
-          printf("Child (%d): %d\n", count, getpid());
-
-
+        // check if argv[0] is a c file 
+        if (strstr(p->argv[0], ".c") != NULL){
+          compiler(p);
         }
+
+        // execute the file
+        execvp(p->argv[0], p->argv);
+
+        // // First process
+        // if (p == j->first_process){
+        //   printf("Child (%d): %d\n", count, getpid());
+
+
+        // // Last process
+        // } else if (p->next == NULL){
+        //   printf("Child (%d): %d\n", count, getpid());
+
+
+        // // Middle process
+        // } else {
+        //   printf("Child (%d): %d\n", count, getpid());
+
+
+        // }
         
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
@@ -259,12 +290,20 @@ void spawn_job(job_t *j, bool fg) {
         p->pid = pid;
         set_child_pgid(j, p);
 
+        int status;
+
+        close(fd[0]);
+
         // parent waits until child completes
-        wait(NULL);
+        waitpid(pid, &status, 0);
         
     }
 
     /* YOUR CODE HERE?  Parent-side code for new job.*/
+
+    //close(p); // is this right? <--- no, it's not
+              // shit I don't remember what this line was
+
 	  seize_tty(getpid()); // assign the terminal back to dsh
 	}
 }
@@ -304,16 +343,14 @@ void printJobCollection(){
   }
 }
 
-  //ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
-  //            THE JOB BANK. 
-
+//ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
+//           THE JOB BANK. 
 
 /* 
  * builtin_cmd - If the user has typed a built-in command then execute
  * it immediately.  
  */
 bool builtin_cmd(job_t *last_job, int argc, char **argv) {
-  // Check whether the command then execute it immediately
   
   // Should we "quit"?
   if (!strcmp(argv[0], "quit")) {
@@ -326,8 +363,8 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
 
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
-      if(argc <=1 || chdir(argv[1])==-1){
-        logError("can't do this bub\n");  // needs to be put in logger later
+      if(argc <= 1 || chdir(argv[1]) == -1) {
+        logError("can't do this bub\n");
       }
       return true;
   
@@ -361,7 +398,7 @@ void addToJobCollection(job_t* lastJob){
   if(headOfJobCollection == NULL){
     headOfJobCollection = lastJob;
   
-  } else{
+  } else {
 
     job_t* current;
     current = headOfJobCollection;
@@ -371,7 +408,6 @@ void addToJobCollection(job_t* lastJob){
     }
 
     current->next = lastJob;
-
   }
 }
 
@@ -412,7 +448,6 @@ void printMyJob(job_t* j){
   }
 }
 //-------------------------------------------------
-
 
 int main() {
 
