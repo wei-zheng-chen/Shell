@@ -38,6 +38,15 @@ void new_child(job_t *j, process_t *p, bool fg) {
   signal(SIGTTOU, SIG_DFL);
 }
 
+//Error logging
+
+void logError(char* text) {
+  //store completed entry in log
+  FILE* logfile = fopen("dsh.log", "a");
+  fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
+  fclose(logfile);
+}
+
 // I/O Redirection - Works
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
@@ -338,7 +347,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
       if(argc <=1 || chdir(argv[1])==-1){
-        printf("can't do this bub\n");  // needs to be put in logger later
+        logError("can't do this bub\n");  // needs to be put in logger later
       }
       return true;
   
@@ -421,17 +430,6 @@ void printMyJob(job_t* j){
     }
     current = current->next;
   }
-}
-
-void logError(char* text) {
-  //Complete the full error reporting entry
-  char* errortext[100]; 
-  strcpy(errortext, "Error: (%s)", strerror(errno));
-  strcat(errortext, text);
-  //store completed entry in log
-  FILE* logfile = fopen("dsh.log", "a");
-  fwrite(logfile, errortext);
-  fclose(logfile);
 }
 //-------------------------------------------------
 
