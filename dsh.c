@@ -45,7 +45,8 @@ void input(process_t*p){
     dup2(fd, STDIN_FILENO);
     close(fd);
   } else {
-    printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
+    //printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
+    logError("Cant open shit for inputting\n");
   }
 }
 
@@ -55,7 +56,8 @@ void output(process_t *p){
     dup2(fd, STDOUT_FILENO);
     close(fd);
   } else {
-    printf("Cant open shit for writing\n");
+    //printf("Cant open shit for writing\n"); 
+    logError("Cant open shit for writing\n");
   }
 }
 
@@ -419,6 +421,17 @@ void printMyJob(job_t* j){
     }
     current = current->next;
   }
+}
+
+void logError(char* text) {
+  //Complete the full error reporting entry
+  char* errortext[100]; 
+  strcpy(errortext, "Error: (%s)", strerror(errno));
+  strcat(errortext, text);
+  //store completed entry in log
+  FILE* logfile = fopen("dsh.log", "a");
+  fwrite(logfile, errortext);
+  fclose(logfile);
 }
 //-------------------------------------------------
 
