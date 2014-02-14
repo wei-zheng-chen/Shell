@@ -159,8 +159,8 @@ void single_process(job_t *j, bool fg){
         // set up the programming environment!
         redirection(p);
         
-        // check if argv[0] is a c file 
-        if (strstr(p->argv[0], ".c") != NULL){
+        // check if argv[0] is a c file and not run with gcc already
+        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
         }
 
@@ -262,8 +262,8 @@ void pipeline_process(job_t *j, bool fg){
           close(pipes[i]);
         }
 
-        // check if argv[0] is a c file 
-        if (strstr(p->argv[0], ".c") != NULL){
+        // check if argv[0] is a c file and not run with gcc already
+        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
         }
 
@@ -291,6 +291,7 @@ void pipeline_process(job_t *j, bool fg){
     }
   }
   // where should this be located?
+  // do we also need to free all of the processes?
   free(j);
 }
 
@@ -318,10 +319,11 @@ void printJobCollection(){
   current = headOfJobCollection;
 
   if(current == NULL){
-    promptMessage = "there are currently no bloody jobs";
+    promptMessage = "There are not currently any jobs";
     printf("%s\n", promptMessage);
     return;
-  }
+  } // question: is this ^^ ever possible? since the process of calling
+    // jobs will put jobs in the collection, right?
 
   while(current!=NULL){
 
@@ -458,6 +460,9 @@ int main() {
 
 	while(1) {
         job_t *j = NULL;
+
+    // ATTENTION: doesn't support multiple jobs in one go
+    // such as ls ; cat hello.c <-- only does ls
 
 		if(!(j = readcmdline(promptmsg()))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
