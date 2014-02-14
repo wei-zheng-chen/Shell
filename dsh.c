@@ -53,7 +53,7 @@ void input(process_t*p){
     dup2(fd, STDIN_FILENO);
     close(fd);
   } else {
-    logError("Can't open shit for inputting\n"); // oh what pleasant notes
+    logError("Input file cannot be opened; cannot read\n");
   }
 }
 
@@ -63,7 +63,7 @@ void output(process_t *p){
     dup2(fd, STDOUT_FILENO);
     close(fd);
   } else {
-    logError("Cant open shit for writing\n");
+    logError("Output file cannot be opened; cannot write\n");
   }
 }
 
@@ -100,6 +100,7 @@ void compiler(process_t *p){
   switch (pid = fork()){
     case -1:
       printf("FORK ERRORRRRRRR!!!\n");
+      // LOG ERROR???
 
     case 0:
       execv("/usr/bin/gcc",gccArgs);
@@ -112,15 +113,18 @@ void compiler(process_t *p){
         }
         // now that child has completed, what shall we do?
 
-        // check exit status (which means what?)
-      if(WIFEXITED(status)){
-          // something with exit status here?
-          printf("My error code is: %s\n", strerror(errno));
-          // I really don't understand what this does ^^^^^
-      }
+      // check exit status (which means what?)
+      // if(WIFEXITED(status)){
+      //     // something with exit status here?
+      //     printf("My error code is: %s\n", strerror(errno));
+      //     // I really don't understand what this does ^^^^^
+      // }
      
   }
   //put the executable files back in to argv[0] AKA replacing the "file.c"
+
+  // TODO: all executable files should be nameved devil
+
   sprintf(p->argv[0], "./%s", compileFileName);
   printf("this is my new filename: %s\n", p->argv[0]);
 
@@ -145,7 +149,7 @@ void single_process(job_t *j, bool fg){
   switch (pid = fork()) {
 
     case -1: /* fork failure */
-        perror("fork");
+        perror("fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0: /* child process  */
@@ -183,11 +187,12 @@ void single_process(job_t *j, bool fg){
         
         // check exit status (which means what?)
         // ATTENTION: does this need to be logged?
-        if(WIFEXITED(status)){
-          // something with exit status here?
-          printf("My error code is: %s\n", strerror(errno));
-          // I really don't understand what this does ^^^^^
-        }
+
+        // if(WIFEXITED(status)){
+        //   // something with exit status here?
+        //   printf("My error code is: %s\n", strerror(errno));
+        //   // I really don't understand what this does ^^^^^
+        // }
   }
 
   free(j);
@@ -340,19 +345,23 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   
   // Should we "quit"?
   if (!strcmp(argv[0], "quit")) {
-            exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
   
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
-      printJobCollection();
-      return true;
+    printJobCollection();
+    free(last_job);
+    return true;
 
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
-      if(argc <= 1 || chdir(argv[1]) == -1) {
-        logError("can't do this bub\n");
-      }
-      return true;
+    
+    if(argc <= 1 || chdir(argv[1]) == -1) {
+      logError("Improper use of cd\n");
+    }
+
+    free(last_job);
+    return true;
   
   // Should it run in the background?
   } else if (!strcmp("bg", argv[0])) {
