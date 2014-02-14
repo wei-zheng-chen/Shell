@@ -195,7 +195,7 @@ void single_process(job_t *j, bool fg){
         // }
   }
 
-  free_job(j);
+  free(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
@@ -291,7 +291,7 @@ void pipeline_process(job_t *j, bool fg){
     }
   }
   // where should this be located?
-  free_job(j);
+  free(j);
 }
 
 void spawn_job(job_t *j, bool fg){
@@ -354,7 +354,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
     printJobCollection();
-    free_job(last_job);
+    free(last_job);
     return true;
 
   // Are we changing directories?
@@ -364,7 +364,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
       logError("Improper use of cd\n");
     }
 
-    free_job(last_job);
+    free(last_job);
     return true;
   
   // Should it run in the background?
