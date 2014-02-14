@@ -44,13 +44,12 @@ void new_child(job_t *j, process_t *p, bool fg) {
   signal(SIGTTOU, SIG_DFL);
 }
 
-//Error logging
-
+// Error logging
 void logError(char* text) {
-  //store completed entry in log
-  FILE* logfile = fopen("dsh.log", "a");
-  fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
-  fclose(logfile);
+   //store completed entry in log
+   FILE* logfile = fopen("dsh.log", "a");
+   fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
+   fclose(logfile);
 }
 
 // I/O Redirection - Works
@@ -60,8 +59,7 @@ void input(process_t*p){
     dup2(fd, STDIN_FILENO);
     close(fd);
   } else {
-    //printf("Cant open shit for inputting\n"); // oh what pleasant notes we have
-    logError("Cant open shit for inputting\n");
+    logError("Input file cannot be opened; cannot read\n");
   }
 }
 
@@ -71,8 +69,7 @@ void output(process_t *p){
     dup2(fd, STDOUT_FILENO);
     close(fd);
   } else {
-    //printf("Cant open shit for writing\n"); 
-    logError("Cant open shit for writing\n");
+    logError("Output file cannot be opened; cannot write\n");
   }
 }
 
@@ -84,7 +81,6 @@ void redirection(process_t * p){
     output(p);
   }
 }
-
 
 // for compiliing c programs
 void compiler(process_t *p){
@@ -111,6 +107,7 @@ void compiler(process_t *p){
   switch (pid = fork()){
     case -1:
       printf("FORK ERRORRRRRRR!!!\n");
+      // LOG ERROR???
 
     case 0:
       execv("/usr/bin/gcc",gccArgs);
@@ -123,23 +120,27 @@ void compiler(process_t *p){
         }
         // now that child has completed, what shall we do?
 
-        // check exit status (which means what?)
-      if(WIFEXITED(status)){
-          // something with exit status here?
-          printf("My error code is: %s\n", strerror(errno));
-          // I really don't understand what this does ^^^^^
-      }
+      // check exit status (which means what?)
+      // if(WIFEXITED(status)){
+      //     // something with exit status here?
+      //     printf("My error code is: %s\n", strerror(errno));
+      //     // I really don't understand what this does ^^^^^
+      // }
      
   }
   //put the executable files back in to argv[0] AKA replacing the "file.c"
+// <<<<<<< HEAD
   sprintf(p->argv[0], "./%s", "devil"); //compileFileName);
-  printf("this is my new filename: %s\n", p->argv[0]);
+// =======
+
+//   // TODO: all executable files should be nameved devil
+
+//   sprintf(p->argv[0], "./%s", compileFileName);
+//   printf("this is my new filename: %s\n", p->argv[0]);
 
   // free(compileFileName);
   free(gccArgs);
-
 }
-
 
 /* Spawning a process with job control. fg is true if the 
  * newly-created process is to be placed in the foreground. 
@@ -150,7 +151,6 @@ void compiler(process_t *p){
  * pgid: this feature is used to start the second or 
  * subsequent processes in a pipeline.
  * */
-
 void single_process(job_t *j, bool fg){
 
   pid_t pid;
@@ -159,7 +159,7 @@ void single_process(job_t *j, bool fg){
   switch (pid = fork()) {
 
     case -1: /* fork failure */
-        perror("fork");
+        perror("fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0: /* child process  */
@@ -169,8 +169,8 @@ void single_process(job_t *j, bool fg){
         // set up the programming environment!
         redirection(p);
         
-        // check if argv[0] is a c file 
-        if (strstr(p->argv[0], ".c") != NULL){
+        // check if argv[0] is a c file and not run with gcc already
+        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
         }
 
@@ -178,7 +178,7 @@ void single_process(job_t *j, bool fg){
         execvp(p->argv[0], p->argv);
         
         // let's debug why it didn't work...
-        printf("My error code is: %s\n", strerror(errno));
+        // printf("My error code is: %s\n", strerror(errno));
 
         // once child program completes, this case is done
         exit(EXIT_FAILURE);  /* NOT REACHED */
@@ -196,84 +196,122 @@ void single_process(job_t *j, bool fg){
         }
         
         // check exit status (which means what?)
-        if(WIFEXITED(status)){
-          // something with exit status here?
-          printf("My error code is: %s\n", strerror(errno));
-          // I really don't understand what this does ^^^^^
-        }
+        // ATTENTION: does this need to be logged?
+
+        // if(WIFEXITED(status)){
+        //   // something with exit status here?
+        //   printf("My error code is: %s\n", strerror(errno));
+        //   // I really don't understand what this does ^^^^^
+        // }
   }
 
   free(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
-void spawn_job(job_t *j, bool fg) {
+void pipeline_process(job_t *j, bool fg){
+ 
+  pid_t pid;
+  process_t *p;
 
-	pid_t pid;
-	process_t *p;
+  // counts number of pipes needed; there will be numPipes+1 total processes
+  int numPipes = -1; 
 
-  /* Builtin commands are already taken care earlier */
-
-  // Do we need to create a pipeline?
-  if (j->first_process->next == NULL){
-    single_process(j, fg);
-    return;
+  for(p = j->first_process; p; p = p->next) {
+    numPipes++;
   }
 
-  int count = 0;
+  // now we need to make n pipes
+  int pipes[numPipes*2]; // each pipe needs 2 fds
+  int i = 0;
 
-  // How long is our pipeline? --> count
+  while(i++ < numPipes){
+    pipe(pipes + 2*i);
+  }
+
+  // now let's loop to fork the children
+  int numProcess = 0;
+
   // loops through each item in the pipeline
-	for(p = j->first_process; p; p = p->next) {
-    
-    count++;
+  for(p = j->first_process; p; p = p->next){
+    numProcess++; // which number process are we on?
 
-    int fd[2];
-    pipe(fd);
-    
-	  switch (pid = fork()) {
+    // will be different pipeline situation depending on location
+    switch (pid = fork()){
 
-      case -1: /* fork failure */
-        perror("fork");
+      case -1: // Fork failed
+        perror("fork in pipeline");
         exit(EXIT_FAILURE);
 
-      case 0: /* child process  */
-        p->pid = getpid();	    
+      case 0: // Child process
+        p->pid = getpid(); // Should this be updated for group ids?
         new_child(j, p, fg);
-        
+
+        // set up pipeline based on location
+
+        // how to add the redirection here? (is there redirection?)
+
         // First process
         if (p == j->first_process){
-          printf("Child (%d): %d\n", count, getpid());
-
+          dup2(pipes[1], 1); // write to the pipeline
 
         // Last process
         } else if (p->next == NULL){
-          printf("Child (%d): %d\n", count, getpid());
-
+          dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
 
         // Middle process
         } else {
-          printf("Child (%d): %d\n", count, getpid());
-
-
+          dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
+          dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
         }
+
+        // close pipelines
+        int i = 0;
+        int n = 2*numPipes; // number of pipe ends
+        while (i++ < n){
+          close(pipes[i]);
+        }
+
+        // check if argv[0] is a c file and not run with gcc already
+        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
+          compiler(p);
+        }
+
+        // execute the file
+        execvp(p->argv[0], p->argv);
         
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
-      default: /* parent */
-        /* establish child process group */
+      default: // Parent process
+        
+        // establish child process group (how?)
         p->pid = pid;
         set_child_pgid(j, p);
 
-        // parent waits until child completes
-        wait(NULL);
-        
-    }
+        // want parent to continue the loop to fork again
+        // deal with tty here?
+        seize_tty(getpid()); // assign the terminal back to dsh
 
-    /* YOUR CODE HERE?  Parent-side code for new job.*/
-	  seize_tty(getpid()); // assign the terminal back to dsh
-	}
+        break;
+
+        // parent waits until all child complete
+        // not sure where to write the wait?
+        wait(NULL);
+    }
+  }
+  // where should this be located?
+  // do we also need to free all of the processes?
+  free(j);
+}
+
+void spawn_job(job_t *j, bool fg){
+  // Builtin commands are already taken care earlier
+  if (j->first_process->next == NULL){
+    single_process(j, fg);
+  } else {
+    pipeline_process(j, fg);
+  }
 }
 
 /* Sends SIGCONT signal to wake up the blocked job */
@@ -291,10 +329,11 @@ void printJobCollection(){
   current = headOfJobCollection;
 
   if(current == NULL){
-    promptMessage = "there are currently no bloody jobs";
+    promptMessage = "There are not currently any jobs";
     printf("%s\n", promptMessage);
     return;
-  }
+  } // question: is this ^^ ever possible? since the process of calling
+    // jobs will put jobs in the collection, right?
 
   while(current!=NULL){
 
@@ -312,35 +351,35 @@ void printJobCollection(){
   }
 }
 
-  //ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
-  //            THE JOB BANK. 
-
+//ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
+//           THE JOB BANK (somewhat done)
 
 /* 
  * builtin_cmd - If the user has typed a built-in command then execute
  * it immediately.  
  */
 bool builtin_cmd(job_t *last_job, int argc, char **argv) {
-  // Check whether the command then execute it immediately
   
   // Should we "quit"?
   if (!strcmp(argv[0], "quit")) {
-            exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
   
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
-      // printf("IM CALLLING JOBS ___________________________________________________\n");
-      // printf("this is in the job bank\n");
-      // printMyJob(headOfJobCollection);
-      printJobCollection();
-      return true;
+
+    printJobCollection();
+    free(last_job);
+    return true;
 
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
-      if(argc <=1 || chdir(argv[1])==-1){
-        logError("can't do this bub\n");  // needs to be put in logger later
-      }
-      return true;
+    
+    if(argc <= 1 || chdir(argv[1]) == -1) {
+      logError("Improper use of cd\n");
+    }
+
+    free(last_job);
+    return true;
   
   // Should it run in the background?
   } else if (!strcmp("bg", argv[0])) {
@@ -372,7 +411,7 @@ void addToJobCollection(job_t* lastJob){
   if(headOfJobCollection == NULL){
     headOfJobCollection = lastJob;
   
-  } else{
+  } else {
 
     job_t* current;
     current = headOfJobCollection;
@@ -382,7 +421,6 @@ void addToJobCollection(job_t* lastJob){
     }
 
     current->next = lastJob;
-
   }
 }
 
@@ -424,16 +462,19 @@ void printMyJob(job_t* j){
 }
 //-------------------------------------------------
 
-
 int main() {
 
 	init_dsh();
+  // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
 
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
 
 	while(1) {
         job_t *j = NULL;
+
+    // ATTENTION: doesn't support multiple jobs in one go
+    // such as ls ; cat hello.c <-- only does ls
 
 		if(!(j = readcmdline(promptmsg()))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
