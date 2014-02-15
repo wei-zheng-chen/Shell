@@ -293,6 +293,7 @@ void pipeline_process(job_t *j, bool fg){
   pid_t pid;
   process_t *p;
 
+
   // counts number of pipes needed; there will be numPipes+1 total processes
   int numPipes = -1; 
 
@@ -302,19 +303,15 @@ void pipeline_process(job_t *j, bool fg){
 
   // now we need to make n pipes
   int pipes[numPipes*2]; // each pipe needs 2 fds
-  int i = 0;
+  int i = -1;
 
-  while(i++ < numPipes){
+  while(++i < numPipes){
     pipe(pipes + 2*i);
   }
 
-  // now let's loop to fork the children
-  int numProcess = 0;
 
   // loops through each item in the pipeline
   for(p = j->first_process; p; p = p->next){
-    numProcess++; // which number process are we on?
-
     // will be different pipeline situation depending on location
     switch (pid = fork()){
 
@@ -328,7 +325,7 @@ void pipeline_process(job_t *j, bool fg){
 
         // set up pipeline based on location
 
-        // how to add the redirection here? (is there redirection?)
+        // ATTENTION: how to add the redirection here? (is there redirection?)
 
         // First process
         if (p == j->first_process){
@@ -347,9 +344,9 @@ void pipeline_process(job_t *j, bool fg){
         }
 
         // close pipelines
-        int i = 0;
+        int i = -1;
         int n = 2*numPipes; // number of pipe ends
-        while (i++ < n){
+        while (i < n){
           close(pipes[i]);
         }
 //-----------------------------------------EXECUTING P AFTER SETTING UP THE BLODDLY PIPE-----------------
@@ -371,9 +368,11 @@ void pipeline_process(job_t *j, bool fg){
         p->pid = pid;
         set_child_pgid(j, p);
 
+
         // want parent to continue the loop to fork again
         // deal with tty here?
         // seize_tty(getpid()); // assign the terminal back to dsh
+
 
         // break;
 
@@ -409,6 +408,7 @@ void continue_job(job_t *j) {
 
 void printJobCollection(){
   // int jobCounter = 0;
+
   char* promptMessage;  
   // char* jobStatus;
 
@@ -550,6 +550,13 @@ void printMyJob(job_t* j){
 //-------------------------------------------------
 
 int main() {
+
+  int i=-1;
+
+  while(++i < 5){
+    printf("%d\n", i);
+  }
+
 
 	init_dsh();
   // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
