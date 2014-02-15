@@ -56,7 +56,7 @@ void logError(char* text) {
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
-    dup2(fd, STDIN_FILENO);
+    dup2(fd, STDIN_FILENO); // do we need to add error checking in case dup2 fails?
     close(fd);
   } else {
     logError("Input file cannot be opened; cannot read\n");
@@ -170,9 +170,8 @@ void makeParentWait(job_t* j, int status, int pid){
     current = current -> next;
   }
 
-// printf("hiiiiiiiiii\n");
+  // printf("hiiiiiiiiii\n");
   //check it against the conditions and modifieds
-
 
   //check if the process exit and said the process are all complete - everything is normal
   if(WIFEXITED(status) == true){
@@ -181,7 +180,6 @@ void makeParentWait(job_t* j, int status, int pid){
   }
 
   //check if its stopped by a signal or something
-
   if(WIFSTOPPED(status)== true){
     printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     p->stopped = true;
@@ -260,6 +258,9 @@ void single_process(job_t *j, bool fg){
         // printf("My error code is: %s\n", strerror(errno));
 
         // once child program completes, this case is done
+
+        // ATTENTION: NEED TO ADD ERROR LOGGING HERE
+
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -275,7 +276,7 @@ void single_process(job_t *j, bool fg){
         }
         
         // check exit status (which means what?)
-        // ATTENTION: does this need to be logged?
+        // ATTENTION: does this need to be logged? ERROR LOGGING!!!!
 
         // if(WIFEXITED(status)){
         //   // something with exit status here?
@@ -292,103 +293,82 @@ void pipeline_process(job_t *j, bool fg){
  
   pid_t pid;
   process_t *p;
-
-
-  // counts number of pipes needed; there will be numPipes+1 total processes
-  int numPipes = -1; 
-
-  for(p = j->first_process; p; p = p->next) {
-    numPipes++;
-  }
-
-  // now we need to make n pipes
-  int pipes[numPipes*2]; // each pipe needs 2 fds
-  int i = -1;
-
-  while(++i < numPipes){
-    pipe(pipes + 2*i);
-  }
-
+  int pipes[2];
+  int end = 3;
 
   // loops through each item in the pipeline
   for(p = j->first_process; p; p = p->next){
-    // will be different pipeline situation depending on location
+    
+    // Create a pipe for this location (and error check)
+    if (pipe(pipes) < 0){
+      perror("pipe");
+      logError("Failed to create pipe");
+    }
+
     switch (pid = fork()){
 
       case -1: // Fork failed
         perror("fork in pipeline");
+        logError("Failed to fork correctly");
         exit(EXIT_FAILURE);
 
       case 0: // Child process
         p->pid = getpid(); // Should this be updated for group ids?
         new_child(j, p, fg);
-
-        // set up pipeline based on location
-
-        // ATTENTION: how to add the redirection here? (is there redirection?)
+        redirection(p); // ATTENTION: how to add the redirection here? (is there redirection?)
 
         // First process
         if (p == j->first_process){
+          close(pipes[0]); // not reading from pipeline
           dup2(pipes[1], 1); // write to the pipeline
 
         // Last process
-        } 
-
-        if (p->next == NULL){
-          dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
+        } else if (p->next == NULL){
+          dup2(pipes[end], 0); // read from the pipeline
+          close(pipes[0]);
 
         // Middle process
         } else {
-          dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
-          dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
+          dup2(pipes[end], 0); // read from pipeline
+          close(pipes[0]);
+          dup2(pipes[1], 1); // write to pipeline
         }
 
-        // close pipelines
-        int i = -1;
-        int n = 2*numPipes; // number of pipe ends
-        while (i < n){
-          close(pipes[i]);
-        }
-//-----------------------------------------EXECUTING P AFTER SETTING UP THE BLODDLY PIPE-----------------
         // check if argv[0] is a c file and not run with gcc already
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
         }
 
-        redirection(p);
         // execute the file
         execvp(p->argv[0], p->argv);
         
-        exit(EXIT_FAILURE);  /* NOT REACHED */
-        break;    /* NOT REACHED */
+        // Should not ever be reached
+        perror("failed exec");
+        logError("Child did not exec correctly");
+        exit(EXIT_FAILURE);
+        break;
 
       default: // Parent process
-        
-        // establish child process group (how?)
         p->pid = pid;
         set_child_pgid(j, p);
-
-
-        // want parent to continue the loop to fork again
-        // deal with tty here?
-        // seize_tty(getpid()); // assign the terminal back to dsh
-
-
-        // break;
-
-        // parent waits until all child complete
-        // not sure where to write the wait?
-        // wait(NULL);
-    }//<------this BLOODY thing ( } )is for the DAM switch shit------------------------------
-    // time to make parent wait before the for loop goes to the next bloody process!!!!------------------
-    int status= 0;
-    int pid = 0;
-    if(fg == true){
-      pid =waitpid(WAIT_ANY,&status,WUNTRACED);
-      printf("making parent wait, this is pid: %d\n", pid);
-      makeParentWait(j,status,pid);
-    }
+        end = pipes[0];
+        close(pipes[1]);
+    } // end of switch
+  } // end for loop
+  
+  // Deal with parent waiting
+  int status, id = 0;
+  if(fg == true){
+    id = waitpid(WAIT_ANY, &status, WUNTRACED);
+    printf("making parent wait, this is pid: %d\n", id);
+    makeParentWait(j, status, pid);
   }
+
+  // Return terminal to parent
+  if(isatty(STDIN_FILENO)) {
+    seize_tty(getpid());
+  }
+
 }
 
 void spawn_job(job_t *j, bool fg){
@@ -402,8 +382,9 @@ void spawn_job(job_t *j, bool fg){
 
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) {
-     if(kill(-j->pgid, SIGCONT) < 0)
-          perror("kill(SIGCONT)");
+  if(kill(-j->pgid, SIGCONT) < 0)
+    perror("kill(SIGCONT)");
+  // Should we add an error message to STDERR?
 }
 
 void printJobCollection(){
@@ -465,7 +446,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
       logError("Improper use of cd\n");
     }
 
-    free(last_job);
+    free(last_job); // or do we need to mark it as status = completed
     return true;
   
   // Should it run in the background?
@@ -488,7 +469,7 @@ char* promptmsg() {
   char* promptMessage; 
 
   // Modified as to include pid 
-  snprintf(str,50,"%s%ld%s", "dsh-", (long)getpid(), "$ ");
+  snprintf(str, 50, "%s%ld%s", "dsh-", (long)getpid(), "$ ");
   promptMessage = str;
 	return promptMessage;
 }
@@ -551,21 +532,13 @@ void printMyJob(job_t* j){
 
 int main() {
 
-  int i=-1;
-
-  while(++i < 5){
-    printf("%d\n", i);
-  }
-
-
 	init_dsh();
   // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
-
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
 
 	while(1) {
-        job_t *j = NULL;
+    job_t *j = NULL;
 
     // ATTENTION: doesn't support multiple jobs in one go
     // such as ls ; cat hello.c <-- only does ls
@@ -573,41 +546,31 @@ int main() {
 		if(!(j = readcmdline(promptmsg()))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
 				fflush(stdout);
-
-				printf("\n");
+			  printf("\n");
 				exit(EXIT_SUCCESS);
-           		}
+      }
 			continue; /* NOOP; user entered return or spaces with return */
 		}
 
-        /* Only for debugging purposes to show parser output; turn off in the
-         * final code */
-        // if(PRINT_INFO) print_job(j);
+    /* Only for debugging purposes to show parser output; turn off in the
+    * final code */
+    //if(PRINT_INFO) print_job(j);
 
-        /* Your code goes here */
-        /* You need to loop through jobs list since a command line can contain ;*/
-        /* Check for built-in commands */
-        /* If not built-in */
-            /* If job j runs in foreground */
-            /* spawn_job(j,true) */
-            /* else */
-            /* spawn_job(j,false) */
+    // Loop through the jobs listed in the command line
+    while(j != NULL){
+      int argc = j->first_process->argc;
+      char** argv = j->first_process->argv;
 
+      printf("------------------What is my current job-------------------\n");
+      print_job(j);
 
-        while(j !=NULL){
-          int argc = j->first_process->argc;
+      // Check for builtin commands
+      if(!builtin_cmd(j,argc,argv)){
+        addToJobCollection(j);
+        spawn_job(j,!(j->bg)); 
+      }
 
-          char** argv = j->first_process->argv;
-
-          // printMyJob(j);
-
-          if(!builtin_cmd(j,argc,argv)){
-            // printf("Getting a bloody Job\n");
-            addToJobCollection(j);
-            spawn_job(j,!(j->bg)); 
-          }
-          j = j->next;
-        }
-
+      j = j->next;
     }
+  }
 }
