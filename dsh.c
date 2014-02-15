@@ -4,6 +4,12 @@ void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for t
 void continue_job(job_t *j); /* resume a stopped job */
 void spawn_job(job_t *j, bool fg); /* spawn a new job */
 
+
+//-----erase when finish--------------------/
+void printMyJob(job_t *j);
+void printMyJobProcess(process_t*p);
+//-------------------------------------------/
+
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
 
 /* Sets the process group id for a given job and process */
@@ -81,9 +87,10 @@ void compiler(process_t *p){
   int status =0;
   pid_t pid;
 
-  char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
-  memcpy(compileFileName, p->argv[0],(strlen(p->argv[0])-2));
-  compileFileName[(strlen(p->argv[0])-2)] ='\0';
+  // The next 3 lines just make it so that the compiled file name is not always devil.
+  // char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
+  // memcpy(compileFileName, p->argv[0],(strlen(p->argv[0])-2));
+  // compileFileName[(strlen(p->argv[0])-2)] ='\0';
 
   // printf("this is my filename: %s This is it's size: %lu\n", p->argv[0],strlen(p->argv[0])-2);
   // printf("this is my compilefilename: %s\n ",compileFileName);
@@ -92,7 +99,7 @@ void compiler(process_t *p){
   char **gccArgs = (char**)malloc(sizeof(char*)*5);
   gccArgs[0] = "gcc";
   gccArgs[1] = "-o";
-  gccArgs[2] = compileFileName;
+  gccArgs[2] = "devil"; //compileFileName;
   gccArgs[3] = p->argv[0];
   gccArgs[4] = '\0';
 
@@ -122,13 +129,16 @@ void compiler(process_t *p){
      
   }
   //put the executable files back in to argv[0] AKA replacing the "file.c"
+// <<<<<<< HEAD
+  sprintf(p->argv[0], "./%s", "devil"); //compileFileName);
+// =======
 
-  // TODO: all executable files should be nameved devil
+//   // TODO: all executable files should be nameved devil
 
-  sprintf(p->argv[0], "./%s", compileFileName);
-  printf("this is my new filename: %s\n", p->argv[0]);
+//   sprintf(p->argv[0], "./%s", compileFileName);
+//   printf("this is my new filename: %s\n", p->argv[0]);
 
-  free(compileFileName);
+  // free(compileFileName);
   free(gccArgs);
 }
 
@@ -242,7 +252,9 @@ void pipeline_process(job_t *j, bool fg){
           dup2(pipes[1], 1); // write to the pipeline
 
         // Last process
-        } else if (p->next == NULL){
+        } 
+
+        if (p->next == NULL){
           dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
 
         // Middle process
@@ -263,6 +275,7 @@ void pipeline_process(job_t *j, bool fg){
           compiler(p);
         }
 
+        redirection(p);
         // execute the file
         execvp(p->argv[0], p->argv);
         
@@ -324,16 +337,17 @@ void printJobCollection(){
 
   while(current!=NULL){
 
-    if(current ->notified){
-      jobStatus = "(Complete)";
-    } else {
-      jobStatus = "(Running)";
-    }
+   
+  //   if(current ->notified){
+  //     jobStatus = "(Complete)";
+  //   } else {
+  //     jobStatus = "(Running)";
+  //   }
 
-    printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+  //   printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
 
-    current = current->next;
-    jobCounter ++;
+  //   current = current->next;
+  //   jobCounter ++;
   }
 }
 
@@ -352,6 +366,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
+
     printJobCollection();
     free(last_job);
     return true;
