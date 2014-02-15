@@ -204,10 +204,9 @@ void makeParentWait(job_t* j, int status, int pid){
     }
   }
 
-  printf("this is the process after it get check the signals ------------\n");
-        printMyJobProcess( p);
-
-printf("----------------------------------------\n");
+printf("this is the process after it get check the signals ------------\n");
+printMyJobProcess( p);
+printf("---------------------------------------------------------------\n");
 
   if(job_is_stopped(j) && isatty(STDIN_FILENO)){
       seize_tty(getpid());
@@ -217,6 +216,7 @@ printf("----------------------------------------\n");
   //if the job is not full stoped and the tty can't not be taken control,keep waiting
 
   //having the code below first so it does return a segfault - figuring out why that is
+  //possiblitly - > missing a base case.....
   return;// makeParentWait(j,status, pid);
 
 }
@@ -352,7 +352,7 @@ void pipeline_process(job_t *j, bool fg){
         while (i++ < n){
           close(pipes[i]);
         }
-
+//-----------------------------------------EXECUTING P AFTER SETTING UP THE BLODDLY PIPE-----------------
         // check if argv[0] is a c file and not run with gcc already
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
@@ -380,19 +380,16 @@ void pipeline_process(job_t *j, bool fg){
         // parent waits until all child complete
         // not sure where to write the wait?
         // wait(NULL);
+    }//<------this BLOODY thing ( } )is for the DAM switch shit------------------------------
+    // time to make parent wait before the for loop goes to the next bloody process!!!!------------------
+    int status= 0;
+    int pid = 0;
+    if(fg == true){
+      pid =waitpid(WAIT_ANY,&status,WUNTRACED);
+      printf("making parent wait, this is pid: %d\n", pid);
+      makeParentWait(j,status,pid);
     }
-      int status= 0;
-      int pid = 0;
-      if(fg == true){
-
-        pid =waitpid(WAIT_ANY,&status,WUNTRACED);
-        printf("making parent wait, this is pid: %d\n", pid);
-        makeParentWait(j,status,pid);
-      }
   }
-  // where should this be located?
-  // do we also need to free all of the processes?
-  // free(j);
 }
 
 void spawn_job(job_t *j, bool fg){
