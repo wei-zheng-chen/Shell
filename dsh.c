@@ -214,6 +214,7 @@ void pipeline_process(job_t *j, bool fg){
   pid_t pid;
   process_t *p;
 
+
   // counts number of pipes needed; there will be numPipes+1 total processes
   int numPipes = -1; 
 
@@ -223,9 +224,9 @@ void pipeline_process(job_t *j, bool fg){
 
   // now we need to make n pipes
   int pipes[numPipes*2]; // each pipe needs 2 fds
-  int i = 0;
+  int i = -1;
 
-  while(i++ < numPipes){
+  while(++i < numPipes){
     pipe(pipes + 2*i);
   }
 
@@ -264,9 +265,9 @@ void pipeline_process(job_t *j, bool fg){
         }
 
         // close pipelines
-        int i = 0;
+        int i = -1;
         int n = 2*numPipes; // number of pipe ends
-        while (i++ < n){
+        while (i < n){
           close(pipes[i]);
         }
 
@@ -287,11 +288,7 @@ void pipeline_process(job_t *j, bool fg){
         // establish child process group (how?)
         p->pid = pid;
         set_child_pgid(j, p);
-        tcsetpgrp(); // WHAT DOES THIS DO???
-
-        // want parent to continue the loop to fork again
-        // deal with tty here?
-        seize_tty(getpid()); // assign the terminal back to dsh
+        //tcsetpgrp(); // WHAT DOES THIS DO???
 
         break;
 
@@ -302,6 +299,10 @@ void pipeline_process(job_t *j, bool fg){
   }
   // where should this be located?
   // do we also need to free all of the processes?
+  tcsetpgrp(0, SIGTTOU);
+  // want parent to continue the loop to fork again
+        // deal with tty here?
+        seize_tty(getpid()); // assign the terminal back to dsh
   free(j);
 }
 
@@ -321,9 +322,9 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  int jobCounter = 0;
+  //int jobCounter = 0;
   char* promptMessage;  
-  char* jobStatus;
+  // char* jobStatus;
 
   job_t* current;
   current = headOfJobCollection;
@@ -463,6 +464,13 @@ void printMyJob(job_t* j){
 //-------------------------------------------------
 
 int main() {
+
+  int i=-1;
+
+  while(++i < 5){
+    printf("%d\n", i);
+  }
+
 
 	init_dsh();
   // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
