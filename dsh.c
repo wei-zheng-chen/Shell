@@ -144,46 +144,70 @@ void compiler(process_t *p){
 
 
 void makeParentWait(job_t* j, int status, int pid){
-  if(pid == waitpid(WAIT_ANY,&status,WUNTRACED) <= 0){
+  if(pid <= 0){
     return;
   }
   //get the process
   process_t* p;
+  int innerWhileBreak = 0;
   job_t *current = j;
+
   while(current != NULL){
     process_t* currentProcess = current -> first_process;
     while( currentProcess != NULL){
       if(currentProcess -> pid == pid){
         p = currentProcess;
+        printf("this is the process that i am looking at\n");
+        printMyJobProcess( p);
+        innerWhileBreak = 1;
+        break;
       }
       currentProcess = currentProcess->next;
+    }
+    if(innerWhileBreak == 1){
+      break;
     }
     current = current -> next;
   }
 
+// printf("hiiiiiiiiii\n");
   //check it against the conditions and modifieds
 
+
+  //check if the process exit and said the process are all complete - everything is normal
   if(WIFEXITED(status) == true){
     p->completed = true;
    fflush(stdout);
   }
 
+  //check if its stopped by a signal or something
+
   if(WIFSTOPPED(status)== true){
-    printf("process is stopped\n");
+    printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     p->stopped = true;
     j->notified = true;
     j->bg = true;
   }
 
+  //check if the signal told the process to continue again
+  //child resume if SIGCOUT is signaled
   if(WIFCONTINUED(status)== true){
     p->stopped = false;
   }
 
+// Check if the child's process is terminated by the terminal
   if(WIFSIGNALED(status)==true){
     p->completed = true;
-  }else{
-    printf("child died\n");
+    printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
+    if(WCOREDUMP(status) == true){
+      printf("child is taking a core dump\n");
+    }
   }
+
+  printf("this is the process after it get check the signals ------------\n");
+        printMyJobProcess( p);
+
+printf("----------------------------------------\n");
 
   if(job_is_stopped(j) && isatty(STDIN_FILENO)){
       seize_tty(getpid());
@@ -191,7 +215,9 @@ void makeParentWait(job_t* j, int status, int pid){
   }
 
   //if the job is not full stoped and the tty can't not be taken control,keep waiting
-  return makeParentWait(j,status, pid);
+
+  //having the code below first so it does return a segfault - figuring out why that is
+  return;// makeParentWait(j,status, pid);
 
 }
 
@@ -355,20 +381,17 @@ void pipeline_process(job_t *j, bool fg){
         // not sure where to write the wait?
         // wait(NULL);
     }
-    int status= 0;
-    int pid = 0;
-    if(fg == true){
+      int status= 0;
+      int pid = 0;
+      if(fg == true){
 
-      makeParentWait(j,status,pid);
-      
-      
-     }
-
-    
+        pid =waitpid(WAIT_ANY,&status,WUNTRACED);
+        printf("making parent wait, this is pid: %d\n", pid);
+        makeParentWait(j,status,pid);
+      }
   }
   // where should this be located?
   // do we also need to free all of the processes?
-
   // free(j);
 }
 
