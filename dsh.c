@@ -294,18 +294,24 @@ void pipeline_process(job_t *j, bool fg){
 
         // want parent to continue the loop to fork again
         // deal with tty here?
-        seize_tty(getpid()); // assign the terminal back to dsh
+        // seize_tty(getpid()); // assign the terminal back to dsh
 
-        break;
+        // break;
 
         // parent waits until all child complete
         // not sure where to write the wait?
-        wait(NULL);
+        // wait(NULL);
+    }
+
+    if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+      seize_tty(getpid())
+      break;
     }
   }
   // where should this be located?
   // do we also need to free all of the processes?
-  free(j);
+
+  // free(j);
 }
 
 void spawn_job(job_t *j, bool fg){
