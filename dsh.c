@@ -177,6 +177,7 @@ void makeParentWait(job_t* j, int status, int pid){
   //check if the process exit and said the process are all complete - everything is normal
   if(WIFEXITED(status) == true){
     p->completed = true;
+    p->status = 0;
    fflush(stdout);
   }
 
@@ -254,7 +255,11 @@ void single_process(job_t *j, bool fg){
         }
 
         // execute the file
-        execvp(p->argv[0], p->argv);
+        if( execvp(p->argv[0], p->argv) == -1){
+
+          printf("execvp failed");
+
+        }
         
         // let's debug why it didn't work...
         // printf("My error code is: %s\n", strerror(errno));
@@ -268,11 +273,19 @@ void single_process(job_t *j, bool fg){
         p->pid = pid;
         set_child_pgid(j, p);
 
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0){
-          perror("waitpid");
-          exit(EXIT_FAILURE);
-        }
+         int status= 0;
+        int pid = 0;
+    if(fg == true){
+      pid =waitpid(WAIT_ANY,&status,WUNTRACED);
+      printf("making parent wait, this is pid: %d\n", pid);
+      makeParentWait(j,status,pid);
+    }
+
+        // int status = 0;
+        // if (waitpid(pid, &status, 0) < 0){
+        //   perror("waitpid");
+        //   exit(EXIT_FAILURE);
+        // }
         
         // check exit status (which means what?)
         // ATTENTION: does this need to be logged?
@@ -283,8 +296,9 @@ void single_process(job_t *j, bool fg){
         //   // I really don't understand what this does ^^^^^
         // }
   }
+  printf("hey im giving the termial back in single\n");
+  j->notified  = job_is_completed(j);
 
-  free(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
@@ -394,8 +408,10 @@ void pipeline_process(job_t *j, bool fg){
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care earlier
   if (j->first_process->next == NULL){
+    printf("single process\n");
     single_process(j, fg);
   } else {
+    printf("pipeline bitch!\n");
     pipeline_process(j, fg);
   }
 }
@@ -450,12 +466,13 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Should we "quit"?
   if (!strcmp(argv[0], "quit")) {
     exit(EXIT_SUCCESS);
-  
+    
+    return true;
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
 
     printJobCollection();
-    free(last_job);
+    // free(last_job);
     return true;
 
   // Are we changing directories?
@@ -465,16 +482,20 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
       logError("Improper use of cd\n");
     }
 
-    free(last_job);
+    // free(last_job);
     return true;
   
   // Should it run in the background?
   } else if (!strcmp("bg", argv[0])) {
       /* Your code here */
   
+    return true;
   // Should it run in the foreground?
   } else if (!strcmp("fg", argv[0])) {
       /* Your code here */
+    printf( "hi im in fg");
+
+    return true;
   }
   
   // We've checked all of the builtin commands
@@ -594,18 +615,25 @@ int main() {
             /* spawn_job(j,false) */
 
 
-        while(j !=NULL){
+        while(j != NULL){
+
           int argc = j->first_process->argc;
 
           char** argv = j->first_process->argv;
-
+          // printf("--------------What is my Curent job-------------------------\n");
           // printMyJob(j);
+          // printf("-------------------------------------------------------------\n");
 
           if(!builtin_cmd(j,argc,argv)){
-            // printf("Getting a bloody Job\n");
+            printf("Getting a bloody Job\n");
             addToJobCollection(j);
             spawn_job(j,!(j->bg)); 
           }
+
+          // printf("--------------What is my after job-------------------------\n");
+          // printMyJob(j);
+          // printf("-------------------------------------------------------------\n");
+
           j = j->next;
         }
 
