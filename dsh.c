@@ -142,6 +142,59 @@ void compiler(process_t *p){
   free(gccArgs);
 }
 
+
+void makeParentWait(job_t* j, int status, int pid){
+  if(pid == waitpid(WAIT_ANY,&status,WUNTRACED) <= 0){
+    return;
+  }
+  //get the process
+  process_t* p;
+  job_t *current = j;
+  while(current != NULL){
+    process_t* currentProcess = current -> first_process;
+    while( currentProcess != NULL){
+      if(currentProcess -> pid == pid){
+        p = currentProcess;
+      }
+      currentProcess = currentProcess->next;
+    }
+    current = current -> next;
+  }
+
+  //check it against the conditions and modifieds
+
+  if(WIFEXITED(status) == true){
+    p->completed = true;
+   fflush(stdout);
+  }
+
+  if(WIFSTOPPED(status)== true){
+    printf("process is stopped\n");
+    p->stopped = true;
+    j->notified = true;
+    j->bg = true;
+  }
+
+  if(WIFCONTINUED(status)== true){
+    p->stopped = false;
+  }
+
+  if(WIFSIGNALED(status)==true){
+    p->completed = true;
+  }else{
+    printf("child died\n");
+  }
+
+  if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+      seize_tty(getpid());
+      return;
+  }
+
+  //if the job is not full stoped and the tty can't not be taken control,keep waiting
+  return makeParentWait(j,status, pid);
+
+}
+
 /* Spawning a process with job control. fg is true if the 
  * newly-created process is to be placed in the foreground. 
  * (This implicitly puts the calling process in the background, 
@@ -302,11 +355,16 @@ void pipeline_process(job_t *j, bool fg){
         // not sure where to write the wait?
         // wait(NULL);
     }
+    int status= 0;
+    int pid = 0;
+    if(fg == true){
 
-    if(job_is_stopped(j) && isatty(STDIN_FILENO)){
-      seize_tty(getpid())
-      break;
-    }
+      makeParentWait(j,status,pid);
+      
+      
+     }
+
+    
   }
   // where should this be located?
   // do we also need to free all of the processes?
@@ -330,9 +388,9 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  int jobCounter = 0;
+  // int jobCounter = 0;
   char* promptMessage;  
-  char* jobStatus;
+  // char* jobStatus;
 
   job_t* current;
   current = headOfJobCollection;
