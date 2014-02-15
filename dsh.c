@@ -219,13 +219,9 @@ void pipeline_process(job_t *j, bool fg){
     pipe(pipes + 2*i);
   }
 
-  // now let's loop to fork the children
-  int numProcess = 0;
 
   // loops through each item in the pipeline
   for(p = j->first_process; p; p = p->next){
-    numProcess++; // which number process are we on?
-
     // will be different pipeline situation depending on location
     switch (pid = fork()){
 
@@ -239,7 +235,7 @@ void pipeline_process(job_t *j, bool fg){
 
         // set up pipeline based on location
 
-        // how to add the redirection here? (is there redirection?)
+        // ATTENTION: how to add the redirection here? (is there redirection?)
 
         // First process
         if (p == j->first_process){
@@ -278,6 +274,7 @@ void pipeline_process(job_t *j, bool fg){
         // establish child process group (how?)
         p->pid = pid;
         set_child_pgid(j, p);
+        tcsetpgrp(); // WHAT DOES THIS DO???
 
         // want parent to continue the loop to fork again
         // deal with tty here?
