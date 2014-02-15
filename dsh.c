@@ -256,7 +256,9 @@ void pipeline_process(job_t *j, bool fg){
           dup2(pipes[1], 1); // write to the pipeline
 
         // Last process
-        } else if (p->next == NULL){
+        } 
+
+        if (p->next == NULL){
           dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
 
         // Middle process
@@ -277,6 +279,7 @@ void pipeline_process(job_t *j, bool fg){
           compiler(p);
         }
 
+        redirection(p);
         // execute the file
         execvp(p->argv[0], p->argv);
         
