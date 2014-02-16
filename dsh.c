@@ -38,10 +38,12 @@ void new_child(job_t *j, process_t *p, bool fg) {
   set_child_pgid(j, p);
 
   if(fg) // if fg is set
-		seize_tty(j->pgid); // assign the terminal
-
-  /* Set the handling for job control signals back to the default. */
-  signal(SIGTTOU, SIG_DFL);
+    if(job_is_stopped(j) && isatty(STDIN_FILENO)){  //this if-statement was not part of the original new child
+       seize_tty(j->pgid); // assign the terminal
+        /* Set the handling for job control signals back to the default. */
+        signal(SIGTTOU, SIG_DFL);
+    }
+ 
 }
 
 // Error logging
@@ -143,7 +145,7 @@ void compiler(process_t *p){
 }
 
 
-void makeParentWait(job_t* j, int status, int pid){
+void makeParentWait(job_t* j, int status, pid_t pid){
   if(pid <= 0){
     return;
   }
@@ -157,8 +159,8 @@ void makeParentWait(job_t* j, int status, int pid){
     while( currentProcess != NULL){
       if(currentProcess -> pid == pid){
         p = currentProcess;
-        printf("this is the process that i am looking at\n");
-        printMyJobProcess( p);
+        // printf("this is the process that i am looking at\n");
+        // printMyJobProcess( p);
         innerWhileBreak = 1;
         break;
       }
@@ -186,8 +188,8 @@ void makeParentWait(job_t* j, int status, int pid){
   if(WIFSTOPPED(status)== true){
     printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     p->stopped = true;
-    j->notified = true;
-    j->bg = true;
+    current->notified = true;
+    current->bg = true;
   }
 
   //check if the signal told the process to continue again
@@ -205,9 +207,14 @@ void makeParentWait(job_t* j, int status, int pid){
     }
   }
 
-printf("this is the process after it get check the signals ------------\n");
-printMyJobProcess( p);
-printf("---------------------------------------------------------------\n");
+// printf("this is the process after it get check the signals ------------\n");
+// printMyJobProcess( p);
+// printf("---------------------------------------------------------------\n");
+
+// if(isatty(STDIN_FILENO)){
+//     printf("EBADF: %d\n", EBADF);
+//     printf("EINVAL: %d\n", EINVAL);
+// }
 
   if(job_is_stopped(j) && isatty(STDIN_FILENO)){
     printf(" you im seizing this bitch\n");
@@ -220,7 +227,8 @@ printf("heyyyy\n");
 
   //having the code below first so it does return a segfault - figuring out why that is
   //possiblitly - > missing a base case.....
-  return makeParentWait(j,status, pid);
+
+  return;// makeParentWait(j,status, pid);
 
 }
 
@@ -233,206 +241,310 @@ printf("heyyyy\n");
  * pgid: this feature is used to start the second or 
  * subsequent processes in a pipeline.
  * */
-void single_process(job_t *j, bool fg){
 
-  pid_t pid;
-  process_t *p = j->first_process;
 
-  switch (pid = fork()) {
+// void single_process(job_t *j, bool fg){
 
-    case -1: /* fork failure */
-        perror("fork error in single_process");
-        exit(EXIT_FAILURE);
+//   pid_t pid;
+//   process_t *p = j->first_process;
 
-    case 0: /* child process  */
-        p->pid = getpid();      
-        new_child(j, p, fg);
+//   switch (pid = fork()) {
+
+//     case -1: /* fork failure */
+//         perror("fork error in single_process");
+//         exit(EXIT_FAILURE);
+
+//     case 0: /* child process  */
+//         p->pid = getpid();      
+//         new_child(j, p, fg);
         
-        // set up the programming environment!
-        redirection(p);
+//         // set up the programming environment!
+//         redirection(p);
         
-        // check if argv[0] is a c file and not run with gcc already
-        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-          compiler(p);
-        }
+//         // check if argv[0] is a c file and not run with gcc already
+//         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
+//           compiler(p);
+//         }
 
-        // execute the file
-        if( execvp(p->argv[0], p->argv) == -1){
+//         // execute the file
+//         if( execvp(p->argv[0], p->argv) == -1){
 
-          printf("execvp failed");
+//           printf("execvp failed");
 
-        }
+//         }
         
-        // let's debug why it didn't work...
-        // printf("My error code is: %s\n", strerror(errno));
+//         // let's debug why it didn't work...
+//         // printf("My error code is: %s\n", strerror(errno));
 
-        // once child program completes, this case is done
-        exit(EXIT_FAILURE);  /* NOT REACHED */
-        break;    /* NOT REACHED */
+//         // once child program completes, this case is done
+//         exit(EXIT_FAILURE);  /* NOT REACHED */
+//         break;    /* NOT REACHED */
 
-    default: /* parent */
-        /* establish child process group */
-        p->pid = pid;
-        set_child_pgid(j, p);
+//     default: /* parent */
+//         /* establish child process group */
+//         p->pid = pid;
+//         set_child_pgid(j, p);
 
-         int status= 0;
-        int pid = 0;
-    if(fg == true){
-      pid =waitpid(WAIT_ANY,&status,WUNTRACED);
-      printf("making parent wait, this is pid: %d\n", pid);
-      makeParentWait(j,status,pid);
-    }
+//          int status= 0;
+//         int pid = 0;
+//     if(fg == true){
+//       pid =waitpid(WAIT_ANY,&status,WUNTRACED);
+//       printf("making parent wait, this is pid: %d\n", pid);
+//       makeParentWait(j,status,pid);
+//     }
 
-        // int status = 0;
-        // if (waitpid(pid, &status, 0) < 0){
-        //   perror("waitpid");
-        //   exit(EXIT_FAILURE);
-        // }
+//         // int status = 0;
+//         // if (waitpid(pid, &status, 0) < 0){
+//         //   perror("waitpid");
+//         //   exit(EXIT_FAILURE);
+//         // }
         
-        // check exit status (which means what?)
-        // ATTENTION: does this need to be logged?
+//         // check exit status (which means what?)
+//         // ATTENTION: does this need to be logged?
 
-        // if(WIFEXITED(status)){
-        //   // something with exit status here?
-        //   printf("My error code is: %s\n", strerror(errno));
-        //   // I really don't understand what this does ^^^^^
-        // }
-  }
-  printf("hey im giving the termial back in single\n");
-  j->notified  = job_is_completed(j);
+//         // if(WIFEXITED(status)){
+//         //   // something with exit status here?
+//         //   printf("My error code is: %s\n", strerror(errno));
+//         //   // I really don't understand what this does ^^^^^
+//         // }
+//   }
+//   printf("hey im giving the termial back in single\n");
+//   j->notified  = job_is_completed(j);
 
-  // seize_tty(getpid()); // assign the terminal back to dsh
-}
+//   // seize_tty(getpid()); // assign the terminal back to dsh
+// }
 
-void pipeline_process(job_t *j, bool fg){
+// void pipeline_process(job_t *j, bool fg){
  
-  pid_t pid;
-  process_t *p;
-  int endfd[2];
+//   pid_t pid;
+//   process_t *p;
+//   int endfd[2];
 
-  // // counts number of pipes needed; there will be numPipes+1 total processes
-  // int numPipes = -1; 
+//   // // counts number of pipes needed; there will be numPipes+1 total processes
+//   // int numPipes = -1; 
 
-  // for(p = j->first_process; p; p = p->next) {
-  //   numPipes++;
-  // }
+//   // for(p = j->first_process; p; p = p->next) {
+//   //   numPipes++;
+//   // }
 
-  // // now we need to make n pipes
-  // int pipes[numPipes*2]; // each pipe needs 2 fds
-  // int i = -1;
+//   // // now we need to make n pipes
+//   // int pipes[numPipes*2]; // each pipe needs 2 fds
+//   // int i = -1;
 
-  // while(++i < numPipes){
-  //   pipe(pipes + 2*i);
-  // }
-
-
-  // loops through each item in the pipeline
-  for(p = j->first_process; p; p = p->next){
-    // will be different pipeline situation depending on location
-    int fd[2];
-    if(pipe(fd) == -1){
-      printf("pipefailed\n");
-    }
-    switch (pid = fork()){
-
-      case -1: // Fork failed
-        perror("fork in pipeline");
-        exit(EXIT_FAILURE);
-
-      case 0: // Child process
-        p->pid = getpid(); // Should this be updated for group ids?
-        set_child_pgid(j,p);
-        // set up pipeline based on location
-
-        // ATTENTION: how to add the redirection here? (is there redirection?)
-
-        // First process
-        if (p == j->first_process){
-          printf("yo im in first if\n");
-          close(fd[0]);
-          dup2(fd[1],STDOUT_FILENO);
-          close(fd[1]);
-          // dup2(pipes[1], 1); // write to the pipeline
-
-        // Last process
-        } else
-
-        if (p->next != NULL){
-            printf("yo im in second if\n");
-
-          dup2(endfd[0],STDIN_FILENO);
-          close(fd[0]);
-          dup2(fd[1], STDOUT_FILENO);
-          close(fd[1]);
-          // dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
-
-        // Middle process
-        } else {
-          printf("im in the else\n");
-          dup2(endfd[0],STDIN_FILENO);
-          close(fd[0]);
-          close(fd[1]);
-          // dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
-          // dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
-        }
-        new_child(j, p, fg);
+//   // while(++i < numPipes){
+//   //   pipe(pipes + 2*i);
+//   // }
 
 
-        // // close pipelines
-        // int i = -1;
-        // int n = 2*numPipes; // number of pipe ends
-        // while (i < n){
-        //   close(pipes[i]);
-        // }
-//-----------------------------------------EXECUTING P AFTER SETTING UP THE BLODDLY PIPE-----------------
-        // check if argv[0] is a c file and not run with gcc already
-        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-          compiler(p);
-        }
+//   // loops through each item in the pipeline
+//   for(p = j->first_process; p; p = p->next){
+//     // will be different pipeline situation depending on location
+//     int fd[2];
+//     if(pipe(fd) == -1){
+//       printf("pipefailed\n");
+//     }
+//     switch (pid = fork()){
 
-        redirection(p);
-        // execute the file
-        execvp(p->argv[0], p->argv);
+//       case -1: // Fork failed
+//         perror("fork in pipeline");
+//         exit(EXIT_FAILURE);
+
+//       case 0: // Child process
+//         p->pid = getpid(); // Should this be updated for group ids?
+//         set_child_pgid(j,p);
+//         // set up pipeline based on location
+
+//         // ATTENTION: how to add the redirection here? (is there redirection?)
+
+//         // First process
+//         if (p == j->first_process){
+//           printf("yo im in first if\n");
+//           close(fd[0]);
+//           dup2(fd[1],STDOUT_FILENO);
+//           close(fd[1]);
+//           // dup2(pipes[1], 1); // write to the pipeline
+
+//         // Last process
+//         } else
+
+//         if (p->next != NULL){
+//             printf("yo im in second if\n");
+
+//           dup2(endfd[0],STDIN_FILENO);
+//           close(fd[0]);
+//           dup2(fd[1], STDOUT_FILENO);
+//           close(fd[1]);
+//           // dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
+
+//         // Middle process
+//         } else {
+//           printf("im in the else\n");
+//           dup2(endfd[0],STDIN_FILENO);
+//           close(fd[0]);
+//           close(fd[1]);
+//           // dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
+//           // dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
+//         }
+//         new_child(j, p, fg);
+
+
+//         // // close pipelines
+//         // int i = -1;
+//         // int n = 2*numPipes; // number of pipe ends
+//         // while (i < n){
+//         //   close(pipes[i]);
+//         // }
+// //-----------------------------------------EXECUTING P AFTER SETTING UP THE BLODDLY PIPE-----------------
+//         // check if argv[0] is a c file and not run with gcc already
+//         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
+//           compiler(p);
+//         }
+
+//         redirection(p);
+//         // execute the file
+//         execvp(p->argv[0], p->argv);
         
-        exit(EXIT_FAILURE);  /* NOT REACHED */
-        break;    /* NOT REACHED */
+//         exit(EXIT_FAILURE);  /* NOT REACHED */
+//         break;    /* NOT REACHED */
 
-      default: // Parent process
+//       default: // Parent process
         
-        // establish child process group (how?)
-        p->pid = pid;
-        set_child_pgid(j, p);
+//         // establish child process group (how?)
+//         p->pid = pid;
+//         set_child_pgid(j, p);
 
-        // want parent to continue the loop to fork again
-        // deal with tty here?
-        // seize_tty(getpid()); // assign the terminal back to dsh
+//         // want parent to continue the loop to fork again
+//         // deal with tty here?
+//         // seize_tty(getpid()); // assign the terminal back to dsh
 
 
-        // break;
+//         // break;
 
-        // parent waits until all child complete
-        // not sure where to write the wait?
-        // wait(NULL);
-    }//<------this BLOODY thing ( } )is for the DAM switch shit------------------------------
-    // time to make parent wait before the for loop goes to the next bloody process!!!!------------------
-    int status= 0;
-    int pid = 0;
-    if(fg == true){
-      pid =waitpid(WAIT_ANY,&status,WUNTRACED);
-      printf("making parent wait, this is pid: %d\n", pid);
-      makeParentWait(j,status,pid);
+//         // parent waits until all child complete
+//         // not sure where to write the wait?
+//         // wait(NULL);
+//     }//<------this BLOODY thing ( } )is for the DAM switch shit------------------------------
+//     // time to make parent wait before the for loop goes to the next bloody process!!!!------------------
+//     int status= 0;
+//     int pid = 0;
+//     if(fg == true){
+//       pid =waitpid(WAIT_ANY,&status,WUNTRACED);
+//       printf("making parent wait, this is pid: %d\n", pid);
+//       makeParentWait(j,status,pid);
+//     }
+//   }
+// }
+
+void setUpPipe(job_t* j, process_t* p, int* prev, int* next,int read, int write){
+    //there are 3 cases
+    if(p != j->first_process){ //when p is not the first process / cause if its the first process, then default should take care of it
+      close(prev[write]);  //this also means that p is in the ahead of the first process, next to it, we close the previous write port
+      dup2(prev[read], read); // duplicated the fd of the previous read of the pipe to the current read pipe
+      close(prev[read]); // close the read pipe
     }
-  }
+
+    if(p -> next != NULL){ //handles the case where p has a next pipe that its needs to feed into
+      close(next[read]); //we close the next read pipe, it does not need to be mod
+      dup2(next[write],write); //duplicate the next write and use it as the write for this processes ( aka feeding output to the next pipe's output)
+      close(next[write]); //close the write
+    }else{
+      dup2(write, next[write]); //duplicate the write to the next[write] as output if its the end of the process
+      close(next[read]);
+      close(next[write]);
+    }
 }
 
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care earlier
-  if (j->first_process->next == NULL){
-    printf("single process\n");
-    single_process(j, fg);
-  } else {
-    printf("pipeline bitch!\n");
-    pipeline_process(j, fg);
+  // if (j->first_process->next == NULL){
+  //   printf("single process\n");
+  //   single_process(j, fg);
+  // } else {
+  //   printf("pipeline bitch!\n");
+  //   pipeline_process(j, fg);
+  // }
+
+  pid_t pid;
+  process_t *p;
+  int prev[2];
+  
+  if(pipe(prev) == -1){
+    perror("prev pipe failed");
+    exit(EXIT_FAILURE);
+  }
+
+  for(p = j->first_process; p; p = p->next) {
+    int next[2];
+    int read = 0;
+    int write = 1;
+    // printf("%d\n",read );
+
+
+    if(pipe(next) == -1){
+      perror("next pipe failed");
+      exit(EXIT_FAILURE);
+    }
+
+    /* YOUR CODE HERE? */
+    /* Builtin commands are already taken care earlier */
+    
+    switch (pid = fork()) {
+
+          case -1: /* fork failure */
+            perror("fork");
+            exit(EXIT_FAILURE);
+
+          case 0: /* child process  */
+            p->pid = getpid();   
+            set_child_pgid(j, p);  
+
+            setUpPipe(j,p, prev, next, read, write);  
+
+            new_child(j, p, fg);
+
+            if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
+               compiler(p);
+             }
+            redirection(p);
+
+            if( execvp(p->argv[0], p->argv) == -1){
+             printf("execvp failed");
+             }
+            
+      /* YOUR CODE HERE?  Child-side code for new process. */
+            perror("New child should have done an exec");
+            exit(EXIT_FAILURE);  /* NOT REACHED */
+            break;    /* NOT REACHED */
+
+          default: /* parent */
+            /* establish child process group */
+            close(next[write]);
+             if(p->next == NULL){
+              close(next[read]);
+            }
+
+            p->pid = pid;
+            set_child_pgid(j, p);
+
+            /* YOUR CODE HERE?  Parent-side code for new process.  */
+            prev[write] = next[write];
+            prev[read] = next[read];
+
+            
+          }
+         
+
+            /* YOUR CODE HERE?  Parent-side code for new job.*/
+      if(fg){
+        // int status;
+        pid_t pid;
+        pid = waitpid(WAIT_ANY, &(p->status), WUNTRACED);
+
+        makeParentWait(j,p->status, pid);
+
+      }
+      // seize_tty(getpid()); // assign the terminal back to dsh
+
   }
 }
 
@@ -646,6 +758,7 @@ int main() {
 
           if(!builtin_cmd(j,argc,argv)){
             printf("Getting a bloody Job\n");
+            headOfJobCollection = NULL;
             addToJobCollection(j);
             spawn_job(j,!(j->bg)); 
           }
