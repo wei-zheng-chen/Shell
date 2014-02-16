@@ -58,7 +58,7 @@ void logError(char* text) {
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
-    dup2(fd, STDIN_FILENO);
+    dup2(fd, STDIN_FILENO); // do we need to add error checking in case dup2 fails?
     close(fd);
   } else {
     logError("Input file cannot be opened; cannot read\n");
@@ -172,9 +172,8 @@ void makeParentWait(job_t* j, int status, pid_t pid){
     current = current -> next;
   }
 
-// printf("hiiiiiiiiii\n");
+  // printf("hiiiiiiiiii\n");
   //check it against the conditions and modifieds
-
 
   //check if the process exit and said the process are all complete - everything is normal
   if(WIFEXITED(status) == true){
@@ -184,7 +183,6 @@ void makeParentWait(job_t* j, int status, pid_t pid){
   }
 
   //check if its stopped by a signal or something
-
   if(WIFSTOPPED(status)== true){
     printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     p->stopped = true;
@@ -407,8 +405,9 @@ printf("heyyyy\n");
 //         exit(EXIT_FAILURE);  /* NOT REACHED */
 //         break;    /* NOT REACHED */
 
+
 //       default: // Parent process
-        
+
 //         // establish child process group (how?)
 //         p->pid = pid;
 //         set_child_pgid(j, p);
@@ -550,8 +549,9 @@ void spawn_job(job_t *j, bool fg){
 
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) {
-     if(kill(-j->pgid, SIGCONT) < 0)
-          perror("kill(SIGCONT)");
+  if(kill(-j->pgid, SIGCONT) < 0)
+    perror("kill(SIGCONT)");
+  // Should we add an error message to STDERR?
 }
 
 void printJobCollection(){
@@ -614,7 +614,8 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
       logError("Improper use of cd\n");
     }
 
-    // free(last_job);
+    //free(last_job); // or do we need to mark it as status = completed
+
     return true;
   
   // Should it run in the background?
@@ -641,7 +642,7 @@ char* promptmsg() {
   char* promptMessage; 
 
   // Modified as to include pid 
-  snprintf(str,50,"%s%ld%s", "dsh-", (long)getpid(), "$ ");
+  snprintf(str, 50, "%s%ld%s", "dsh-", (long)getpid(), "$ ");
   promptMessage = str;
 	return promptMessage;
 }
@@ -704,21 +705,13 @@ void printMyJob(job_t* j){
 
 int main() {
 
-  int i=-1;
-
-  while(++i < 5){
-    printf("%d\n", i);
-  }
-
-
 	init_dsh();
   // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
-
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
 
 	while(1) {
-        job_t *j = NULL;
+    job_t *j = NULL;
 
     // ATTENTION: doesn't support multiple jobs in one go
     // such as ls ; cat hello.c <-- only does ls
@@ -726,35 +719,23 @@ int main() {
 		if(!(j = readcmdline(promptmsg()))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
 				fflush(stdout);
-
-				printf("\n");
+			  printf("\n");
 				exit(EXIT_SUCCESS);
-           		}
+      }
 			continue; /* NOOP; user entered return or spaces with return */
 		}
 
-        /* Only for debugging purposes to show parser output; turn off in the
-         * final code */
-        // if(PRINT_INFO) print_job(j);
+    /* Only for debugging purposes to show parser output; turn off in the
+    * final code */
+    //if(PRINT_INFO) print_job(j);
 
-        /* Your code goes here */
-        /* You need to loop through jobs list since a command line can contain ;*/
-        /* Check for built-in commands */
-        /* If not built-in */
-            /* If job j runs in foreground */
-            /* spawn_job(j,true) */
-            /* else */
-            /* spawn_job(j,false) */
+    // Loop through the jobs listed in the command line
 
 
-        while(j != NULL){
+    while(j != NULL){
 
-          int argc = j->first_process->argc;
-
-          char** argv = j->first_process->argv;
-          // printf("--------------What is my Curent job-------------------------\n");
-          // printMyJob(j);
-          // printf("-------------------------------------------------------------\n");
+      int argc = j->first_process->argc;
+      char** argv = j->first_process->argv;
 
           if(!builtin_cmd(j,argc,argv)){
             printf("Getting a bloody Job\n");
@@ -763,12 +744,11 @@ int main() {
             spawn_job(j,!(j->bg)); 
           }
 
-          // printf("--------------What is my after job-------------------------\n");
-          // printMyJob(j);
-          // printf("-------------------------------------------------------------\n");
+      // printf("--------------What is my after job-------------------------\n");
+      // printMyJob(j);
+      // printf("-------------------------------------------------------------\n");
 
-          j = j->next;
-        }
-
+      j = j->next;
     }
+  }
 }
