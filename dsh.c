@@ -474,8 +474,32 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
     return true;
   // Should it run in the foreground?
   } else if (!strcmp("fg", argv[0])) {
-      /* Your code here */
     printf( "hi im in fg");
+    // have to ensure that is is a separate process group
+
+    // typing just fg resumes the most recently suspended job
+    last_job->bg = false;
+
+    // "fg pgid" resumes the job with that pid
+    int job_pgid = atoi(argv[1]); // get the pid from the line
+    
+    // find the appropriate job in the job list
+    job_t job = headOfJobCollection;
+    while((job != NULL) && (job->pgid != job_pgid)){
+      job = job->next;
+    }
+    // that job did not exist
+    if(job == NULL){
+      logError("Job did not exist");
+      // exit();
+      return true;
+    }
+
+    if (job_is_stopped(job)){
+      continue_job(job);
+    }
+
+    job->bg = false;
 
     return true;
   }
@@ -496,6 +520,7 @@ char* promptmsg() {
 	return promptMessage;
 }
 
+//collection of jobs that are not the built-in commmands
 void addToJobCollection(job_t* lastJob){
   
   if(headOfJobCollection == NULL){
@@ -586,9 +611,10 @@ int main() {
       int argc = j->first_process->argc;
 
       char** argv = j->first_process->argv;
-      // printf("--------------What is my Curent job-------------------------\n");
-      // printMyJob(j);
-      // printf("-------------------------------------------------------------\n");
+      
+      printf("--------------What is my Curent job-------------------------\n");
+      printMyJob(j);
+      printf("-------------------------------------------------------------\n");
 
       if(!builtin_cmd(j,argc,argv)){
         printf("Getting a bloody Job\n");
@@ -596,9 +622,9 @@ int main() {
         spawn_job(j,!(j->bg)); 
       }
 
-      // printf("--------------What is my after job-------------------------\n");
-      // printMyJob(j);
-      // printf("-------------------------------------------------------------\n");
+      printf("--------------What is my after job-------------------------\n");
+      printMyJob(j);
+      printf("-------------------------------------------------------------\n");
 
       j = j->next;
     }
