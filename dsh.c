@@ -210,15 +210,17 @@ printMyJobProcess( p);
 printf("---------------------------------------------------------------\n");
 
   if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+    printf(" you im seizing this bitch\n");
       seize_tty(getpid());
       return;
   }
 
+printf("heyyyy\n");
   //if the job is not full stoped and the tty can't not be taken control,keep waiting
 
   //having the code below first so it does return a segfault - figuring out why that is
   //possiblitly - > missing a base case.....
-  return;// makeParentWait(j,status, pid);
+  return makeParentWait(j,status, pid);
 
 }
 
@@ -299,34 +301,38 @@ void single_process(job_t *j, bool fg){
   printf("hey im giving the termial back in single\n");
   j->notified  = job_is_completed(j);
 
-  seize_tty(getpid()); // assign the terminal back to dsh
+  // seize_tty(getpid()); // assign the terminal back to dsh
 }
 
 void pipeline_process(job_t *j, bool fg){
  
   pid_t pid;
   process_t *p;
+  int endfd[2];
 
+  // // counts number of pipes needed; there will be numPipes+1 total processes
+  // int numPipes = -1; 
 
-  // counts number of pipes needed; there will be numPipes+1 total processes
-  int numPipes = -1; 
+  // for(p = j->first_process; p; p = p->next) {
+  //   numPipes++;
+  // }
 
-  for(p = j->first_process; p; p = p->next) {
-    numPipes++;
-  }
+  // // now we need to make n pipes
+  // int pipes[numPipes*2]; // each pipe needs 2 fds
+  // int i = -1;
 
-  // now we need to make n pipes
-  int pipes[numPipes*2]; // each pipe needs 2 fds
-  int i = -1;
-
-  while(++i < numPipes){
-    pipe(pipes + 2*i);
-  }
+  // while(++i < numPipes){
+  //   pipe(pipes + 2*i);
+  // }
 
 
   // loops through each item in the pipeline
   for(p = j->first_process; p; p = p->next){
     // will be different pipeline situation depending on location
+    int fd[2];
+    if(pipe(fd) == -1){
+      printf("pipefailed\n");
+    }
     switch (pid = fork()){
 
       case -1: // Fork failed
@@ -335,34 +341,49 @@ void pipeline_process(job_t *j, bool fg){
 
       case 0: // Child process
         p->pid = getpid(); // Should this be updated for group ids?
-        new_child(j, p, fg);
-
+        set_child_pgid(j,p);
         // set up pipeline based on location
 
         // ATTENTION: how to add the redirection here? (is there redirection?)
 
         // First process
         if (p == j->first_process){
-          dup2(pipes[1], 1); // write to the pipeline
+          printf("yo im in first if\n");
+          close(fd[0]);
+          dup2(fd[1],STDOUT_FILENO);
+          close(fd[1]);
+          // dup2(pipes[1], 1); // write to the pipeline
 
         // Last process
-        } 
+        } else
 
-        if (p->next == NULL){
-          dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
+        if (p->next != NULL){
+            printf("yo im in second if\n");
+
+          dup2(endfd[0],STDIN_FILENO);
+          close(fd[0]);
+          dup2(fd[1], STDOUT_FILENO);
+          close(fd[1]);
+          // dup2(pipes[numPipes*2 - 2], 0); // read from the pipeline
 
         // Middle process
         } else {
-          dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
-          dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
+          printf("im in the else\n");
+          dup2(endfd[0],STDIN_FILENO);
+          close(fd[0]);
+          close(fd[1]);
+          // dup2(pipes[numPipes*4 - 1], 1); // write to pipeline
+          // dup2(pipes[numPipes*4 - 4], 0); // read from pipeline
         }
+        new_child(j, p, fg);
 
-        // close pipelines
-        int i = -1;
-        int n = 2*numPipes; // number of pipe ends
-        while (i < n){
-          close(pipes[i]);
-        }
+
+        // // close pipelines
+        // int i = -1;
+        // int n = 2*numPipes; // number of pipe ends
+        // while (i < n){
+        //   close(pipes[i]);
+        // }
 //-----------------------------------------EXECUTING P AFTER SETTING UP THE BLODDLY PIPE-----------------
         // check if argv[0] is a c file and not run with gcc already
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
@@ -381,7 +402,6 @@ void pipeline_process(job_t *j, bool fg){
         // establish child process group (how?)
         p->pid = pid;
         set_child_pgid(j, p);
-
 
         // want parent to continue the loop to fork again
         // deal with tty here?
