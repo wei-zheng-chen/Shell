@@ -172,19 +172,30 @@ void makeParentWait(job_t* j, int status, pid_t pid){
     current = current -> next;
   }
 
+
+printf("this is my job--------------------------------------------------\n");
+printMyJob(j);
+printf("this is the process before it get check the signals ------------\n");
+printMyJobProcess( p);
+printf("---------------------------------------------------------------\n");
+
   // printf("hiiiiiiiiii\n");
   //check it against the conditions and modifieds
 
   //check if the process exit and said the process are all complete - everything is normal
   if(WIFEXITED(status) == true){
+    printf("process is completed Successfully\n");
+    printf("this is the status: %d\n",status );
+
     p->completed = true;
-    p->status = 0;
+    p->status = status;
    fflush(stdout);
   }
 
   //check if its stopped by a signal or something
   if(WIFSTOPPED(status)== true){
     printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
+    printf("this is the status: %d\n",status );
     p->stopped = true;
     current->notified = true;
     current->bg = true;
@@ -200,21 +211,24 @@ void makeParentWait(job_t* j, int status, pid_t pid){
   if(WIFSIGNALED(status)==true){
     p->completed = true;
     printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
+    printf("this is the status: %d\n",status );
+
     if(WCOREDUMP(status) == true){
       printf("child is taking a core dump\n");
     }
   }
-
-// printf("this is the process after it get check the signals ------------\n");
-// printMyJobProcess( p);
-// printf("---------------------------------------------------------------\n");
+printf("this is my job after--------------------------------------------------\n");
+printMyJob(j);
+printf("this is the process after it get check the signals ------------\n");
+printMyJobProcess( p);
+printf("---------------------------------------------------------------\n");
 
 // if(isatty(STDIN_FILENO)){
 //     printf("EBADF: %d\n", EBADF);
 //     printf("EINVAL: %d\n", EINVAL);
 // }
 
-  if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+  if(job_is_completed(j) && isatty(STDIN_FILENO)){
     printf(" you im seizing this bitch\n");
       seize_tty(getpid());
       return;
@@ -226,7 +240,7 @@ printf("heyyyy\n");
   //having the code below first so it does return a segfault - figuring out why that is
   //possiblitly - > missing a base case.....
 
-  return;// makeParentWait(j,status, pid);
+  // return makeParentWait(j,status, pid);
 
 }
 
@@ -474,8 +488,9 @@ void spawn_job(job_t *j, bool fg){
 
   for(p = j->first_process; p; p = p->next) {
     int next[2];
-    int read = 0;
-    int write = 1;
+    
+    int read = STDIN_FILENO;
+    int write = STDOUT_FILENO;
     // printf("%d\n",read );
 
 
@@ -501,14 +516,16 @@ void spawn_job(job_t *j, bool fg){
 
             new_child(j, p, fg);
 
+            redirection(p);
+
+
             if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
                compiler(p);
-             }
-            redirection(p);
+            }
 
             if( execvp(p->argv[0], p->argv) == -1){
              printf("execvp failed");
-             }
+            }
             
       /* YOUR CODE HERE?  Child-side code for new process. */
             perror("New child should have done an exec");
@@ -542,6 +559,8 @@ void spawn_job(job_t *j, bool fg){
         makeParentWait(j,p->status, pid);
 
       }
+
+
       // seize_tty(getpid()); // assign the terminal back to dsh
 
   }
