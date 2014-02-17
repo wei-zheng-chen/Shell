@@ -48,7 +48,7 @@ void new_child(job_t *j, process_t *p, bool fg) {
 void logError(char* text) {
    //store completed entry in log
    FILE* logfile = fopen("dsh.log", "a");
-   fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
+   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
    fclose(logfile);
 }
 
@@ -57,10 +57,10 @@ void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
     if (dup2(fd, STDIN_FILENO) < 0){
-      logError("Error occured in dup2 when inputting\n");
+      logError("error occured in dup2 when inputting");
     }
   } else {
-    logError("Input file cannot be opened; cannot read\n");
+    logError("input file cannot be opened; cannot read");
   }
   close(fd);
 }
@@ -69,10 +69,10 @@ void output(process_t *p){
   int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
   if (fd != -1){
     if (dup2(fd, STDOUT_FILENO) < 0){
-      logError("Error occured in dup2 when outputting\n");
+      logError("error occured in dup2 when outputting");
     }
   } else {
-    logError("Output file cannot be opened; cannot write\n");
+    logError("output file cannot be opened; cannot write");
   }
   close(fd);
 }
@@ -342,7 +342,7 @@ void printJobCollection(){
 
     // printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
 
-    // current = current->next;
+    current = current->next;
     // jobCounter ++;
   }
 }
@@ -369,7 +369,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
     if(argc <= 1 || chdir(argv[1]) == -1) {
-      logError("Improper use of cd\n");
+      logError("improper use of cd");
     }
     return true;
   
@@ -381,32 +381,38 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
 
   // Should it run in the foreground?
   } else if (!strcmp("fg", argv[0])) {
-    printf( "hi im in fg");
-    // have to ensure that is is a separate process group
+    // moves a background command to foreground
+    // if there's a parameter, that's the job that should be moved
+    // otherwise, grabs the most recently suspended job
 
-    // typing just fg resumes the most recently suspended job
-    // last_job->bg = false;
+    // assume no parameters (needs to )
+    job_t *j = last_job;
 
-    // // "fg pgid" resumes the job with that pid
-    // int job_pgid = atoi(argv[1]); // get the pid from the line
-    
-    // // find the appropriate job in the job list
-    // job_t job = headOfJobCollection;
-    // while((job != NULL) && (job->pgid != job_pgid)){
-    //   job = job->next;
-    // }
-    // // that job did not exist
-    // if(job == NULL){
-    //   logError("Job did not exist");
-    //   // exit();
-    //   return true;
-    // }
+    // need to overwrite with actual job information
+    if (argc > 1){
+      int pgid = atoi(argv[1]); // get the pid from the line
+      // find the appropriate job in the job list
+      job_t *temp = headOfJobCollection;
+      while((temp != NULL) && (temp->pgid != pgid)){
+        temp = temp->next;
+      }
+      // that pgid number does not exist
+      if(temp == NULL){
+        logError("job did not exist");
+        return true;
+      }
+      j = temp;
+    }
 
-    // if (job_is_stopped(job)){
-    //   continue_job(job);
-    // }
+    j->bg = false;
 
-    // job->bg = false;
+    if (job_is_stopped(j)){
+      continue_job(j);
+      
+      if(isatty(STDIN_FILENO)) {
+        seize_tty(j->pgid);
+      }
+    }
 
     return true;
   }
@@ -441,6 +447,10 @@ void addToJobCollection(job_t* lastJob){
     }
 
     current->next = lastJob;
+    current = current->next;
+    printf("printing last job in JobCollection\n");
+    printMyJob(current);
+    current->next = NULL;
   }
 }
 
@@ -482,9 +492,8 @@ void printMyJob(job_t* j){
 //-------------------------------------------------
 
 int main() {
-
 	init_dsh();
-  // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
+  remove("dsh.log"); // clear log file when starting the shell
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
 
@@ -512,16 +521,16 @@ int main() {
       // printMyJob(j);
       // printf("-----------------------------------------------------------\n");
       if(!builtin_cmd(j, argc, argv)){
-        // printf("Getting a bloody Job\n");
-        headOfJobCollection = NULL;
+        // headOfJobCollection = NULL;
         addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
       }
+      j = j->next;
       // printf("--------------What is my after job-------------------------\n");
       // printMyJob(j);
       // printf("-----------------------------------------------------------\n");
-      j = j->next;
+      // j = j->next;
     }
-    printf("done spawning all processes in job, reading from cmdline again\n");
+    // printf("done spawning all processes in job, reading from cmdline again\n");
   }
 }
