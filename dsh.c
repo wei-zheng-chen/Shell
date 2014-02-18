@@ -365,7 +365,10 @@ void printJobCollection(){
     }
 
     current = current->next;
-    free_job(toRelease);
+    if (toRelease != NULL) {
+      free_job(toRelease);
+      toRelease = NULL;
+    }
     jobCounter ++;
   }
 }
