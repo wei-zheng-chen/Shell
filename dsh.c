@@ -87,7 +87,7 @@ void redirection(process_t * p){
 }
 
 // for compiliing c programs
-void compiler(process_t *p){
+void compiler(job_t* j, process_t *p, bool fg){
   int status =0;
   pid_t pid;
 
@@ -110,9 +110,14 @@ void compiler(process_t *p){
       // LOG ERROR???
 
     case 0: // child
+      p->pid = getpid();      
+      new_child(j, p, fg);
       execv("/usr/bin/gcc", gccArgs);
 
     default: // parent
+      /* establish child process group */
+      p->pid = pid;
+      set_child_pgid(j, p);
       if (waitpid(pid, &status, 0) < 0){
         printf("My error is from the parent waiting\n");
         perror("waitpid");
@@ -265,13 +270,13 @@ void spawn_job(job_t *j, bool fg){
 
       case 0: /* child process  */
         p->pid = getpid();   
-        set_child_pgid(j, p);  
+        //set_child_pgid(j, p);  
 
         setUpPipe(j, p, prev, next, read, write);  
         new_child(j, p, fg);
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-          compiler(p);
+          compiler(j,p,fg);
         }
 
         redirection(p);
