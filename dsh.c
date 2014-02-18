@@ -89,7 +89,7 @@ void compiler(process_t *p){
   int status =0;
   pid_t pid;
 
-  // If we wanted to compile each file so that the exec file is called
+  // if we wanted to compile each file so that the exec file is called
   // its own name (rather than always being called "devil"), use these lines:
   //    char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
   //    memcpy(compileFileName, p->argv[0],(strlen(p->argv[0])-2));
@@ -114,63 +114,52 @@ void compiler(process_t *p){
 
     default: // parent process
       if (waitpid(pid, &status, 0) < 0){
-          printf("My error is from the parent waiting\n");
-          perror("waitpid");
+          perror("waitpid while parent waiting");
           exit(EXIT_FAILURE);
         }     
   }
-  //put the executable files back in to argv[0] AKA replacing the "file.c"
-// <<<<<<< HEAD
+
+  // reconstruct the arg so that it would be able to run in the 
+  // regular child when it returns
   sprintf(p->argv[0], "./%s", "devil"); //compileFileName);
-// =======
+  
+  // if we wanted the exec file to be the same as the .c file
+  //    sprintf(p->argv[0], "./%s", compileFileName);
+  //    free(compileFileName);
 
-//   // TODO: all executable files should be nameved devil
-
-//   sprintf(p->argv[0], "./%s", compileFileName);
-//   printf("this is my new filename: %s\n", p->argv[0]);
-
-  // free(compileFileName);
   free(gccArgs);
 }
 
 
 void checkStatus(job_t* j, process_t* p, int status){
 
-// printf("this is my job--------------------------------------------------\n");
-// printMyJob(j);
-// printf("this is the process before it get check the signals ------------\n");
-// printMyJobProcess( p);
-// printf("---------------------------------------------------------------\n");
-
-  // printf("hiiiiiiiiii\n");
-  //check it against the conditions and modifieds
-
-  //check if the process exit and said the process are all complete - everything is normal
+  // check if the process exit and said the process are all complete
+  // everything is normal
   if(WIFEXITED(status) == true){
     printf("process is completed Successfully\n");
-    printf("this is the status: %d\n",status );
+    printf("this is the status: %d\n", status);
     p->completed = true;
     // p->status = status;
    fflush(stdout);
-  }else
+  }
 
-  //check if its stopped by a signal or something
-  if(WIFSTOPPED(status)== true){
+  // check if its stopped by a signal
+  else if(WIFSTOPPED(status)== true){
     printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     printf("this is the status: %d\n",status );
     p->stopped = true;
     j->notified = true;
     j->bg = true;
-  }else
+  }
 
-  //check if the signal told the process to continue again
-  //child resume if SIGCOUT is signaled
-  if(WIFCONTINUED(status)== true){
+  // check if the signal told the process to continue again
+  // child resume if SIGCOUT is signaled
+  else if(WIFCONTINUED(status)== true){
     p->stopped = false;
-  }else
+  }
 
-// Check if the child's process is terminated by the terminal
-  if(WIFSIGNALED(status)==true){
+  // Check if the child's process is terminated by the terminal
+  else if(WIFSIGNALED(status)==true){
     p->completed = true;
     printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
     printf("this is the status: %d\n",status );
@@ -179,9 +168,7 @@ void checkStatus(job_t* j, process_t* p, int status){
       printf("child is taking a core dump\n");
     }
   }
-
 }
-
 
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
@@ -193,8 +180,6 @@ process_t* findCurrentProcess(job_t* j , pid_t pid){
     while( currentProcess != NULL){
       if(currentProcess -> pid == pid){
       p = currentProcess;
-                    // printf("this is the process that i am looking at\n");
-                    // printMyJobProcess( p);
       innerWhileBreak = 1;
       break;
       }
@@ -236,9 +221,6 @@ void single_process(job_t *j, bool fg){
         // execute the file
         execvp(p->argv[0], p->argv);
         
-        // let's debug why it didn't work...
-        // printf("My error code is: %s\n", strerror(errno));
-
         // once child program completes, this case is done
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
@@ -254,181 +236,109 @@ void single_process(job_t *j, bool fg){
           perror("waitpid");
           exit(EXIT_FAILURE);
         }
-        
-        // check exit status (which means what?)
-        // ATTENTION: does this need to be logged?
-
-        // if(WIFEXITED(status)){
-        //   // something with exit status here?
-        //   printf("My error code is: %s\n", strerror(errno));
-        //   // I really don't understand what this does ^^^^^
-        // }
-
   }
 
   free(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
-void pipeline(job_t * j, bool fg){
-// Builtin commands are already taken care earlier
-  // if (j->first_process->next == NULL){
-  //   printf("single process\n");
-  //   single_process(j, fg);
-  // } else {
-  //   printf("pipeline bitch!\n");
-  //   pipeline_process(j, fg);
-  // }
+void pipeline_process(job_t * j, bool fg){
 
   pid_t pid;
   process_t *p;
   
   int pipeFd[2], input;
   input = pipeFd[0];
-  // output = STDOUT_FILENO;
+
   if(strcmp("cat",j->first_process->argv[0])==0){
     single_process(j, fg);
   }
 
-
   for(p = j->first_process; p; p = p->next) {
     if(pipe(pipeFd) == -1){
-      perror("your pipe is shit");
+      perror("pipeline did not work");
     }
-   
 
-    /* YOUR CODE HERE? */
-    /* Builtin commands are already taken care earlier */
-    
     switch (pid = fork()) {
 
-          case -1: /* fork failure */
-            perror("fork");
-            exit(EXIT_FAILURE);
+      case -1: /* fork failure */
+        perror("fork");
+        exit(EXIT_FAILURE);
 
-          case 0: /* child process  */
-            p->pid = getpid();   
-          set_child_pgid(j, p);
+      case 0: /* child process  */
+        p->pid = getpid();   
+        set_child_pgid(j, p);
+
         if(fg){ // if fg is set
-          if( job_is_stopped(j) && isatty(STDIN_FILENO)){
-              seize_tty(j->pgid); // assign the terminal
-
-
-             /* Set the handling for job control signals back to the default. */
-             signal(SIGTTOU, SIG_DFL);
+          if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+            seize_tty(j->pgid); // assign the terminal
+            // Set the handling for job control signals back to the default.
+            signal(SIGTTOU, SIG_DFL);
           }
-       }
+        }
         
-            // printf("im after redirection\n"); 
+        if(p == j->first_process && p->next == NULL){
+          close(pipeFd[0]);
+          close(pipeFd[1]);
+        }
 
-            if(p == j->first_process && p->next == NULL){
-              close(pipeFd[0]);
-              close(pipeFd[1]);
-            }
-
-            if( p!= j->first_process || (p==j->first_process && p -> next != NULL)  ){
-              if( p == j->first_process){
-                close(pipeFd[0]);
-                dup2(pipeFd[1], STDOUT_FILENO);
-              }else if ( p->next != NULL){
-                dup2(input, STDIN_FILENO);
-                close(pipeFd[0]);
-                dup2(pipeFd[1],1);
-              }else{
-                dup2(input,0);
-                close(pipeFd[0]);
-              }
-
-
-            }
-
-            redirection(p);
-
-
-
-            if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-               compiler(p);
-            }
-            // printf("im after compiler\n"); 
-                // printf("im in the child of the for %s\n",p->argv[0]);
-
-
-
-            if( execvp(p->argv[0], p->argv) == -1){
-              perror("execvp failed");
-            }
-            // printf("this is after exect\n");
-            
-      /* YOUR CODE HERE?  Child-side code for new process. */
-            perror("New child should have done an exec");
-            exit(EXIT_FAILURE);  /* NOT REACHED */
-            break;    /* NOT REACHED */
-
-          default: /* parent */
-
-            printf("i am in the parent case\n");
-
-            printf( "this is the pid that i am setting my progress to %d\n", pid);
-            p->pid = pid;
-            set_child_pgid(j, p);
-            input = pipeFd[0];
-            close(pipeFd[1]);
-
-
-            if(fg){
-              int cpid;
-              int status;
-
-              while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
-                printf("im waiting motherfucker!!!!\n ");
-                p = findCurrentProcess(j,cpid);
-                checkStatus(j, p, status);
-              }
-
-            }
-
-
-
-
+        if(p != j->first_process || (p == j->first_process && p->next != NULL)){
+          if( p == j->first_process){
+            close(pipeFd[0]);
+            dup2(pipeFd[1], STDOUT_FILENO);
+          } else if (p->next != NULL){
+            dup2(input, STDIN_FILENO);
+            close(pipeFd[0]);
+            dup2(pipeFd[1],1);
+          } else{
+            dup2(input,0);
+            close(pipeFd[0]);
           }
+        }
 
-    printf(" i am at the end of the for loops\n");
+        redirection(p);
 
-  } // for loops end bracket
+        if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
+           compiler(p);
+        }
 
-           //  if( fg){
+        if( execvp(p->argv[0], p->argv) == -1){
+          perror("execvp failed");
+        }
+        
+        perror("New child should have done an exec");
+        exit(EXIT_FAILURE);  /* NOT REACHED */
+        break;    /* NOT REACHED */
 
-           //  for(p = j->first_process; p; p = p->next) {
-           //    int status;
-           //    if( waitpid(p->pid, &status, WUNTRACED)>0){
-           //      checkStatus(j, p,status);
+      default: /* parent */
+        p->pid = pid;
+        set_child_pgid(j, p);
+        input = pipeFd[0];
+        close(pipeFd[1]);
 
+        if(fg){
+          int cpid;
+          int status;
 
-           //    }
+          while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
+            p = findCurrentProcess(j,cpid);
+            checkStatus(j, p, status);
+          }
+        } // end if(fg)
+    } // end switch
+  } // end for loop
 
-
-           //  }
-
-
-           // }
-
-
-
-           if(job_is_stopped(j) && isatty(STDIN_FILENO)){
-            seize_tty(getpid());
-           }
-
-
-
-
+  if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+    seize_tty(getpid());
+  }
 }
 
 void spawn_job(job_t *j, bool fg){
-  // Builtin commands are already taken care earlier
+  // Builtin commands are already taken care of
   if (j->first_process->next == NULL){
     single_process(j, fg);
    } else {
-    pipeline(j, fg);
+    pipeline_process(j, fg);
    }
 }
 
@@ -440,84 +350,159 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  // int jobCounter = 0;
+  int jobCounter = 0;
 
   char* promptMessage;  
-  // char* jobStatus;
+  char* jobStatus;
 
   job_t* current;
   current = headOfJobCollection;
 
+  job_t* temp;
+  temp = NULL;
+  job_t* toRelease;
+  toRelease = NULL;
+
   if(current == NULL){
-    promptMessage = "There are not currently any jobs";
-    printf("%s\n", promptMessage);
+    printf("There are not currently any jobs\n");
     return;
-  } // question: is this ^^ ever possible? since the process of calling
-    // jobs will put jobs in the collection, right?
+  }
 
   while(current!=NULL){
-
+    if(job_is_completed(current)) {
+      jobStatus = "Complete";
+      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      if (temp != NULL) {
+        temp->next = current->next;
+        toRelease = current;
+      } else {
+        toRelease = current;
+        headOfJobCollection = current->next;
+      }
+    }
    
-  //   if(current ->notified){
-  //     jobStatus = "(Complete)";
-  //   } else {
-  //     jobStatus = "(Running)";
-  //   }
+    // if(current->notified){
+    //   jobStatus = "(Complete)";
+    // } else {
+    //   jobStatus = "(Running)";
+    // }
 
-  //   printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+    // printf("%d: (%ld) %s %s\n", jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
 
-  //   current = current->next;
-  //   jobCounter ++;
+    // current = current->next;
+
+    else {
+      jobStatus = "Running";
+      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      temp = current;
+    }
+
+    current = current->next;
+    free(toRelease);
+
+    jobCounter ++;
   }
 }
 
 //ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
-//           THE JOB BANK (somewhat done)
+//           THE JOB BANK
 
 /* 
- * builtin_cmd - If the user has typed a built-in command then execute
- * it immediately.  
+ * builtin_cmd - If the user has typed a built-in command,
+ * then execute it immediately.  
  */
 bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   
   // Should we "quit"?
   if (!strcmp(argv[0], "quit")) {
     exit(EXIT_SUCCESS);
-    
     return true;
+
   // Should we print the jobs? 
   } else if (!strcmp("jobs", argv[0])) {
-
     printJobCollection();
-    // free(last_job);
     return true;
 
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
-    
     if(argc <= 1 || chdir(argv[1]) == -1) {
       logError("Improper use of cd\n");
     }
-
-    //free(last_job); // or do we need to mark it as status = completed
-
     return true;
   
   // Should it run in the background?
   } else if (!strcmp("bg", argv[0])) {
-      /* Your code here */
-  
+    /* Your code here */
     return true;
+
   // Should it run in the foreground?
   } else if (!strcmp("fg", argv[0])) {
-      /* Your code here */
-    printf( "hi im in fg");
+    // moves a background command to foreground
+    // if there's a parameter, that's the job that should be moved
+    // otherwise, grabs the most recently suspended job
+
+    // assume no parameters
+    job_t *j = last_job;
+    int pgid;
+
+    // need to overwrite with actual job information
+    if (argc > 1){
+      pgid = atoi(argv[1]); // get the pgid from the line
+      if(pgid == 0){
+        logError("no such pgid number");
+      }
+      // find the appropriate job in the job list
+      job_t *temp = headOfJobCollection;
+      while((temp != NULL) && (temp->pgid != pgid)){
+        temp = temp->next;
+      }
+      // that pgid number does not exist
+      if(temp == NULL){
+        logError("job did not exist");
+        return true;
+      }
+      j = temp;
+    }
+
+    j->bg = false;
+
+    if (job_is_stopped(j)){
+      continue_job(j);
+      j->first_process->stopped = false;
+
+      // check signals coming from that job's processes that were stopped
+      int status = 0;
+      waitpid(pgid, &status, WUNTRACED);
+
+      if(WIFEXITED(status)){ // if first process exited
+        j->first_process->completed = true;
+      } 
+
+      if (WIFSTOPPED(status)){ // if first process is stopped
+        j->first_process->stopped = false;
+      } 
+
+      if (WIFCONTINUED(status)){ // if first process will continue
+        j->first_process->stopped = false;
+        j->first_process->completed = false;
+      }
+
+      // if the first process is completed, then all are
+      process_t *temp = j->first_process;
+      while(temp != NULL){
+        temp->completed = j->first_process->completed;
+        temp = temp->next;
+      }
+
+      if(isatty(STDIN_FILENO)) {
+        seize_tty(j->pgid);
+      }
+    }
 
     return true;
   }
   
-  // We've checked all of the builtin commands
-  // This is not a builtin command
+  // We've checked all of the builtin commands; this is not a builtin command
   return false;
 }
 
@@ -526,27 +511,28 @@ char* promptmsg() {
   char str[50];
   char* promptMessage; 
 
-  // Modified as to include pid 
+  // Modified to include pid 
   snprintf(str, 50, "%s%ld%s", "dsh-", (long)getpid(), "$ ");
   promptMessage = str;
 	return promptMessage;
 }
 
-void addToJobCollection(job_t* lastJob){
+void addToJobCollection(job_t* j){
   
   if(headOfJobCollection == NULL){
-    headOfJobCollection = lastJob;
+    headOfJobCollection = j;
   
   } else {
 
-    job_t* current;
-    current = headOfJobCollection;
+    job_t* temp;
+    temp = headOfJobCollection;
 
-    while(current->next != NULL){
-      current = current->next;
+    while(temp->next != NULL){
+      temp = temp->next;
     }
-
-    current->next = lastJob;
+    // now temp points to the last job in the list
+    // add new jobs to this list of jobs
+    temp->next = j;
   }
 }
 
@@ -591,15 +577,12 @@ void printMyJob(job_t* j){
 int main() {
 
 	init_dsh();
-  // ATTENTION: NEED TO CLEAR THE LOG FILE WHEN STARTING SHELL
+  remove("dsh.log"); // clear log file when starting the shell
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
 
 	while(1) {
     job_t *j = NULL;
-
-    // ATTENTION: doesn't support multiple jobs in one go
-    // such as ls ; cat hello.c <-- only does ls
 
 		if(!(j = readcmdline(promptmsg()))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
@@ -610,27 +593,18 @@ int main() {
 			continue; /* NOOP; user entered return or spaces with return */
 		}
 
-    /* Only for debugging purposes to show parser output; turn off in the
-    * final code */
-    //if(PRINT_INFO) print_job(j);
-
-    // Loop through the jobs listed in the command line
-
+    // add the job to the collection of jobs
     addToJobCollection(j);
 
+    // Loop through the jobs listed in the command line
     while(j != NULL){
 
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
 
-          if(!builtin_cmd(j,argc,argv)){
-            printf("Getting a bloody Job\n");
-            spawn_job(j,!(j->bg)); 
-          }
-
-      // printf("--------------What is my after job-------------------------\n");
-      // printMyJob(j);
-      // printf("-------------------------------------------------------------\n");
+      if(!builtin_cmd(j,argc,argv)){
+        spawn_job(j,!(j->bg)); 
+      }
 
       j = j->next;
     }
