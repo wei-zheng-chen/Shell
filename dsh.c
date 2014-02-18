@@ -124,6 +124,7 @@ void compiler(job_t* j, process_t *p, bool fg){
         exit(EXIT_FAILURE);
       }
   }
+
   // put the executable files back in to argv[0] AKA replacing the "file.c"
   sprintf(p->argv[0], "./%s", "devil");
   
@@ -132,6 +133,7 @@ void compiler(job_t* j, process_t *p, bool fg){
   //   printf("this is my new filename: %s\n", p->argv[0]);
   //   free(compileFileName);
   free(gccArgs);
+  seize_tty(getpid()); // assign the terminal back to dsh
 }
 
 
@@ -310,6 +312,8 @@ void spawn_job(job_t *j, bool fg){
 
       makeParentWait(j, p->status, pid);
     }
+
+    seize_tty(getpid()); // assign the terminal back to dsh
   }
 }
 
