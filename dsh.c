@@ -36,7 +36,8 @@ void new_child(job_t *j, process_t *p, bool fg) {
   set_child_pgid(j, p);
 
   if(fg){ // if fg is set
-    if(job_is_stopped(j) && isatty(STDIN_FILENO)){  //this if-statement was not part of the original new child
+    if(job_is_stopped(j) && isatty(STDIN_FILENO)){  
+    //this if-statement was not part of the original new child
       seize_tty(j->pgid); // assign the terminal
       /* Set the handling for job control signals back to the default. */
       signal(SIGTTOU, SIG_DFL);
@@ -106,8 +107,8 @@ void compiler(process_t *p){
 
   switch (pid = fork()){
     case -1: // error
-      printf("FORK ERRORRRRRRR!!!\n");
-      // LOG ERROR???
+        perror("fork");
+        exit(EXIT_FAILURE);
 
     case 0: // child
       execv("/usr/bin/gcc", gccArgs);
@@ -193,12 +194,12 @@ void makeParentWait(job_t* j, int status, pid_t pid){
 
   // check if the signal told the process to continue again
   // child resume if SIGCOUT is signaled
-  if(WIFCONTINUED(status)== true){
+  if(WIFCONTINUED(status) == true){
     p->stopped = false;
   }
 
   // Check if the child's process is terminated by the terminal
-  if(WIFSIGNALED(status)==true){
+  if(WIFSIGNALED(status) == true){
     p->completed = true;
     printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
     printf("this is the status: %d\n",status );
@@ -334,38 +335,60 @@ void spawn_job(job_t *j, bool fg){
 void continue_job(job_t *j) {
   if(kill(-j->pgid, SIGCONT) < 0)
     perror("kill(SIGCONT)");
-  // Should we add an error message to STDERR?
 }
 
 void printJobCollection(){
-  // int jobCounter = 0;
+  int jobCounter = 0;
 
   char* promptMessage;  
-  // char* jobStatus;
+  char* jobStatus;
 
   job_t* current;
   current = headOfJobCollection;
 
+  job_t* temp;
+  temp = NULL;
+  job_t* toRelease;
+  toRelease = NULL;
+
   if(current == NULL){
-    promptMessage = "There are not currently any jobs";
-    printf("%s\n", promptMessage);
+    printf("There are not currently any jobs\n");
     return;
-  } // question: is this ^^ ever possible? since the process of calling
-    // jobs will put jobs in the collection, right?
+  }
 
   while(current!=NULL){
-
+    if(job_is_completed(current)) {
+      jobStatus = "Complete";
+      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      if (temp != NULL) {
+        temp->next = current->next;
+        toRelease = current;
+      } else {
+        toRelease = current;
+        headOfJobCollection = current->next;
+      }
+    }
    
-    // if(current ->notified){
+    // if(current->notified){
     //   jobStatus = "(Complete)";
     // } else {
     //   jobStatus = "(Running)";
     // }
 
-    // printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+    // printf("%d: (%ld) %s %s\n", jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+
+    // current = current->next;
+
+    else{
+      jobStatus = "Running";
+      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      temp = current;
+    }
 
     current = current->next;
-    // jobCounter ++;
+    free(toRelease);
+
+    jobCounter ++;
   }
 }
 
@@ -407,12 +430,16 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
     // if there's a parameter, that's the job that should be moved
     // otherwise, grabs the most recently suspended job
 
-    // assume no parameters (needs to )
+    // assume no parameters
     job_t *j = last_job;
+    int pgid;
 
     // need to overwrite with actual job information
     if (argc > 1){
-      int pgid = atoi(argv[1]); // get the pid from the line
+      pgid = atoi(argv[1]); // get the pgid from the line
+      if(pgid == 0){
+        logError("no such pgid number");
+      }
       // find the appropriate job in the job list
       job_t *temp = headOfJobCollection;
       while((temp != NULL) && (temp->pgid != pgid)){
@@ -430,7 +457,32 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
 
     if (job_is_stopped(j)){
       continue_job(j);
-      
+      j->first_process->stopped = false;
+
+      // check signals coming from that job's processes that were stopped
+      int status = 0;
+      waitpid(pgid, &status, WUNTRACED);
+
+      if(WIFEXITED(status)){ // if first process exited
+        j->first_process->completed = true;
+      } 
+
+      if (WIFSTOPPED(status)){ // if first process is stopped
+        j->first_process->stopped = false;
+      } 
+
+      if (WIFCONTINUED(status)){ // if first process will continue
+        j->first_process->stopped = false;
+        j->first_process->completed = false;
+      }
+
+      // if the first process is completed, then all are
+      process_t *temp = j->first_process;
+      while(temp != NULL){
+        temp->completed = j->first_process->completed;
+        temp = temp->next;
+      }
+
       if(isatty(STDIN_FILENO)) {
         seize_tty(j->pgid);
       }
@@ -455,24 +507,21 @@ char* promptmsg() {
 }
 
 // Adds the latest job to the collection of non-builtin jobs
-void addToJobCollection(job_t* lastJob){
+void addToJobCollection(job_t* j){
   
   if(headOfJobCollection == NULL){
-    headOfJobCollection = lastJob;
+    headOfJobCollection = j;
   
   } else {
-    job_t* current;
-    current = headOfJobCollection;
+    job_t* temp = headOfJobCollection;
 
-    while(current->next != NULL){
-      current = current->next;
+    while (temp->next != NULL){
+      temp = temp->next;
     }
-
-    current->next = lastJob;
-    current = current->next;
-    printf("printing last job in JobCollection\n");
-    printMyJob(current);
-    current->next = NULL;
+    // now temp points to the last job in the list
+    temp->next = j;
+    // temp = temp->next;
+    // temp->next = NULL;
   }
 }
 
@@ -536,6 +585,8 @@ int main() {
     //if(PRINT_INFO) print_job(j);
 
     // Loop through the jobs listed in the command line
+    addToJobCollection(j);
+    
     while(j != NULL){
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
@@ -544,7 +595,7 @@ int main() {
       // printf("-----------------------------------------------------------\n");
       if(!builtin_cmd(j, argc, argv)){
         // headOfJobCollection = NULL;
-        addToJobCollection(j);
+        //addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
       }
       j = j->next;
