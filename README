@@ -10,15 +10,15 @@
 	Please follow the format or our scripts will break. 
 */
 
-	Name1: 
+	Name1: Wei Chen
 	NetId1: 
 	Time spent: 10 hours
 
-	Name2: 
-	NetId2:
+	Name2: Chelsea Wezensky
+	NetId2: clw33
 	Time spent: 10 hours
 
-	Name3: 
+	Name3: William Johnston
 	NetId3:
 	Time spent: 10 hours
 
@@ -48,6 +48,30 @@
  * In case of lab is limited in some functionality, you should provide the
  * details to maximize your partial credit.  
  * */
+
+While in main, we loop through the jobs that have just been entered in the command line. If it is a built-in command (quit, cd, jobs, fg, bg), we handle that command separately; no fork is necessary (processed in 
+BUILTIN_CMD).
+	quit -- very simple; just exit the program
+	jobs -- print the list of jobs being held in the global variable 
+	        linked list; if jobs are completed after being printed, then
+	        it cleans up the list and removes the completed jobs
+	cd   -- checks to ensure that chdir is being passed a valid directory;
+            logs an error otherwise
+    bg   -- 
+    fg   -- moves a background command to the foreground; supports moving
+            the last_job if there are no parameters, or moving the 
+            appropriate pgid number; if the pgid number is not valid (or is
+            not a number), the error is logged. If the job is stopped, mark
+            the first process as not stopped, check the signals from that 
+            process so that if it has exited, it is marked as completed.
+
+            ^^^^^ is this right???
+
+If it is not a built-in command, we add it to the job collection list and 
+spawn a new job (in SPAWN_JOB). A pipeline is created 
+
+
+
 
 /************************
  * Feedback on the lab
