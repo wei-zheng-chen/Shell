@@ -331,6 +331,7 @@ void single_process(job_t *j, bool fg){
         //   printf("My error code is: %s\n", strerror(errno));
         //   // I really don't understand what this does ^^^^^
         // }
+
   }
 
   free(j);
@@ -484,6 +485,7 @@ void pipeline(job_t * j, bool fg){
            if(job_is_stopped(j) && isatty(STDIN_FILENO)){
             seize_tty(getpid());
            }
+
 
 
 
