@@ -162,11 +162,11 @@ void makeParentWait(job_t* j, int status, pid_t pid){
 
 
 
-printf("this is my job--------------------------------------------------\n");
-printMyJob(j);
-printf("this is the process before it get check the signals ------------\n");
-printMyJobProcess( p);
-printf("---------------------------------------------------------------\n");
+// printf("this is my job--------------------------------------------------\n");
+// printMyJob(j);
+// printf("this is the process before it get check the signals ------------\n");
+// printMyJobProcess( p);
+// printf("---------------------------------------------------------------\n");
 
   // printf("hiiiiiiiiii\n");
 
@@ -390,7 +390,7 @@ void printJobCollection(){
 
     current = current->next;
     free(toRelease);
-    
+
     jobCounter ++;
   }
 }
@@ -588,6 +588,8 @@ int main() {
     //if(PRINT_INFO) print_job(j);
 
     // Loop through the jobs listed in the command line
+    addToJobCollection(j);
+    
     while(j != NULL){
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
@@ -596,7 +598,7 @@ int main() {
       // printf("-----------------------------------------------------------\n");
       if(!builtin_cmd(j, argc, argv)){
         // headOfJobCollection = NULL;
-        addToJobCollection(j);
+        //addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
       }
       j = j->next;
