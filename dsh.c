@@ -21,29 +21,28 @@ int set_child_pgid(job_t *j, process_t *p) {
 }
 
 /* Creates the context for a new child by setting the pid, pgid and tcsetpgrp */
-void new_child(job_t *j, process_t *p, bool fg) {
-  /* establish a new process group, and put the child in
-   * foreground if requested
-   */
+void new_child(job_t *j, process_t *p, bool fg)
+{
+         /* establish a new process group, and put the child in
+          * foreground if requested
+          */
 
-  /* Put the process into the process group and give the process
-   * group the terminal, if appropriate.  This has to be done both by
-   * the dsh and in the individual child processes because of
-   * potential race conditions.  
-   * */
-  
-  p->pid = getpid();
+         /* Put the process into the process group and give the process
+          * group the terminal, if appropriate.  This has to be done both by
+          * the dsh and in the individual child processes because of
+          * potential race conditions.  
+          * */
 
-  /* also establish child process group in child to avoid race (if parent has not done it yet). */
-  set_child_pgid(j, p);
+         p->pid = getpid();
 
-  if(fg) // if fg is set
-    if(job_is_stopped(j) && isatty(STDIN_FILENO)){  //this if-statement was not part of the original new child
-       seize_tty(j->pgid); // assign the terminal
-        /* Set the handling for job control signals back to the default. */
-        signal(SIGTTOU, SIG_DFL);
-    }
- 
+         /* also establish child process group in child to avoid race (if parent has not done it yet). */
+         set_child_pgid(j, p);
+
+         if(fg) // if fg is set
+    seize_tty(j->pgid); // assign the terminal
+
+         /* Set the handling for job control signals back to the default. */
+         signal(SIGTTOU, SIG_DFL);
 }
 
 // Error logging
@@ -219,7 +218,7 @@ printf("heyyyy\n");
 
 }
 
-void setUpPipe(job_t* j, process_t* p,int* pipeFd, int input, int output){
+void setUpPipe(job_t* j, process_t* p, int input, int output){
     //there are 3 cases
 // printf("this is the first_process it get check the signals ------------\n");
 // printMyJobProcess( j->first_process);
@@ -227,41 +226,53 @@ void setUpPipe(job_t* j, process_t* p,int* pipeFd, int input, int output){
 // printf("this is the process it get check the signals ------------\n");
 // printMyJobProcess( p);
 // printf("---------------------------------------------------------------\n");
-if(p == NULL){
-  printf(" p is null \n");
-}
+// if(p == NULL){
+//   printf(" p is null \n");
+// }
+    // printf("%d\n",p->argc);
+    printf("in pipe set up input: %d\n", input);
+    printf("in pipe set up output: %d\n", output );
     printf("%s\n",p->argv[0] );
+    printf("%s\n",p->argv[1] );
 
 // printf("this is pipe 0 : %d\n",pipeFd[0] );
 // printf("this is pipe 1 : %d\n",pipeFd[1] );
   if(p == j->first_process){
-    printf("im in the p = j->first_process\n");
-    dup2(pipeFd[1], STDOUT_FILENO);
-    printf("im done dup2ing in first_process\n");
-    close(pipeFd[1]);
-    printf("i am done\n");
-  }
+    // printf("im in the p = j->first_process\n");
+    // printf("this is output: %d\n", output);
+    // dup2(input, STDIN_FILENO);
+    close(input);
+    dup2(output, STDOUT_FILENO);
+    close(output);
+  }else
 
   if(p->next != NULL && p != j->first_process){
 
-    printf("next process is not null\n");
+    // printf("next process is not null\n");
     
     // dup2(input, STDOUT_FILENO);
     // close(input);
-    dup2(output, STDIN_FILENO);
+    dup2(input, STDIN_FILENO);
+    close(input);
+    dup2(output, STDOUT_FILENO);
     close(output);
-    dup2(pipeFd[1], STDOUT_FILENO);
-    close(pipeFd[1]);
+
+  }else{
+    // printf(" him in the null\n");
+    dup2(input, STDIN_FILENO);
+    close(input);
+    // dup2(output, STDOUT_FILENO);
+    // close(output);
 
   }
 
-  if(p->next == NULL){
-    printf("next process is null\n");
+  // if(p->next == NULL){
+  //   printf("next process is null\n");
 
-    dup2(STDOUT_FILENO, pipeFd[1]);
-    close(pipeFd[1]);
-    // close(pipeFd[0]);
-  }
+  //   // dup2(STDOUT_FILENO, output);
+  //   close(output);
+  //   close(input);
+  // }
 
 
 }
@@ -308,8 +319,8 @@ void spawn_job(job_t *j, bool fg){
   process_t *p;
   
   int pipeFd[2], input, output;
-  input = 0;
-  output = 0;
+  input = STDIN_FILENO;
+  output = STDOUT_FILENO;
 
   for(p = j->first_process; p; p = p->next) {
    
@@ -326,43 +337,56 @@ void spawn_job(job_t *j, bool fg){
           case 0: /* child process  */
             p->pid = getpid();   
             set_child_pgid(j, p);  
+            
 
-            if( p -> next != NULL){
+            if( p!= j->first_process || (p==j->first_process && p -> next != NULL)  ){
               if(pipe(pipeFd) == -1){
-                printf("pipe fail");
+                perror("pipe fail");
               }
+
+            
+
+              if(p->next == NULL){
+                close(pipeFd[1]);
+                close(pipeFd[0]);
+                output = STDOUT_FILENO;
+              }else{
+              output = pipeFd[1];
+              }
+              // printf("output is being maped to pipeFd\n");
+              setUpPipe(j,p, input, output); 
+
               
-              setUpPipe(j,p, pipeFd, input, output); 
-              if(p->next!=NULL){
-                input = pipeFd[0];
-                output = pipeFd[1];
-              }
+              // printf("about to set input to pipefd\n");
+              
+              input = pipeFd[1];
+              printf("this is input : %d\n",input );
             }
 
 
-            printf("im after setting up the pipe\n"); 
+            // printf("im after setting up the pipe\n"); 
 
             new_child(j, p, fg);
-            printf("im after new child\n"); 
+            // printf("im after new child\n"); 
 
 
             redirection(p);
-            printf("im after redirection\n"); 
+            // printf("im after redirection\n"); 
 
 
 
             if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
                compiler(p);
             }
-            printf("im after compiler\n"); 
-                printf("im in the child of the for %s\n",p->argv[0]);
+            // printf("im after compiler\n"); 
+                // printf("im in the child of the for %s\n",p->argv[0]);
 
 
 
             if( execvp(p->argv[0], p->argv) == -1){
-             printf("execvp failed");
+              perror("execvp failed");
             }
-            printf("this is after exect\n");
+            // printf("this is after exect\n");
             
       /* YOUR CODE HERE?  Child-side code for new process. */
             perror("New child should have done an exec");
@@ -414,7 +438,7 @@ void spawn_job(job_t *j, bool fg){
           
     }
 
-
+    printf(" i am at the end of the for loops\n");
 
   } // for loops end bracket
 
