@@ -161,11 +161,11 @@ void makeParentWait(job_t* j, int status, pid_t pid){
 
 
 
-printf("this is my job--------------------------------------------------\n");
-printMyJob(j);
-printf("this is the process before it get check the signals ------------\n");
-printMyJobProcess( p);
-printf("---------------------------------------------------------------\n");
+// printf("this is my job--------------------------------------------------\n");
+// printMyJob(j);
+// printf("this is the process before it get check the signals ------------\n");
+// printMyJobProcess( p);
+// printf("---------------------------------------------------------------\n");
 
   // printf("hiiiiiiiiii\n");
 
@@ -236,9 +236,9 @@ printf("---------------------------------------------------------------\n");
  * */
 
 // sets up the pipe environment for processes when spawning
-void setUpPipe(job_t* j, process_t* p, int* prev, int* next,int read, int write){
+void setUpPipe(job_t* j, process_t* p, int* prev, int* next, int read, int write){
 
-  // it is the first process
+  // it is not the first process
   if(p != j->first_process){    // when p is not the first process / cause if its the first process, then default should take care of it
     close(prev[write]);         // this also means that p is in the ahead of the first process, next to it, we close the previous write port
     dup2(prev[read], read);     // duplicated the fd of the previous read of the pipe to the current read pipe
@@ -247,7 +247,7 @@ void setUpPipe(job_t* j, process_t* p, int* prev, int* next,int read, int write)
   // it is the middle process
   } else if(p->next != NULL){   // handles the case where p has a next pipe that its needs to feed into
     close(next[read]);          // we close the next read pipe, it does not need to be mod
-    dup2(next[write],write);    //duplicate the next write and use it as the write for this processes ( aka feeding output to the next pipe's output)
+    dup2(next[write], write);   //duplicate the next write and use it as the write for this processes ( aka feeding output to the next pipe's output)
     close(next[write]);         //close the write
   
   // it is the last process
@@ -288,11 +288,9 @@ void spawn_job(job_t *j, bool fg){
 
       case 0: /* child process  */
         p->pid = getpid();   
-        set_child_pgid(j, p);  
-
-        setUpPipe(j, p, prev, next, read, write);  
         new_child(j, p, fg);
 
+        setUpPipe(j, p, prev, next, read, write);  
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
@@ -309,16 +307,15 @@ void spawn_job(job_t *j, bool fg){
         break;    /* NOT REACHED */
 
       default: /* parent */
+        p->pid = pid;
+        set_child_pgid(j,p);
+
         /* establish child process group */
         close(next[write]);
 
         if(p->next == NULL){
           close(next[read]);
         }
-
-        p->pid = pid;
-        set_child_pgid(j, p);
-
 
         prev[write] = next[write];
         prev[read] = next[read];
