@@ -361,7 +361,7 @@ void printJobCollection(){
     }
 
     current = current->next;
-    free(toRelease);
+    free_job(toRelease);
     jobCounter ++;
   }
 }
