@@ -30,12 +30,14 @@ void new_child(job_t *j, process_t *p, bool fg) {
    * the dsh and in the individual child processes because of
    * potential race conditions.  
    * */
+  // int dsh_terminal_fd = STDIN_FILENO;
   p->pid = getpid();
 
   /* also establish child process group in child to avoid race (if parent has not done it yet). */
   set_child_pgid(j, p);
 
   if(fg){ // if fg is set
+    // tcsetpgrp(dsh_terminal_fd, j->pgid);
     if(job_is_stopped(j) && isatty(STDIN_FILENO)){  
     //this if-statement was not part of the original new child
       seize_tty(j->pgid); // assign the terminal
@@ -589,7 +591,7 @@ int main() {
 
     // Loop through the jobs listed in the command line
     addToJobCollection(j);
-    
+
     while(j != NULL){
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
