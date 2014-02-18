@@ -321,7 +321,7 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  int jobCounter = 0;
+  int jobCounter = 1;
 
   char* promptMessage;  
   char* jobStatus;
