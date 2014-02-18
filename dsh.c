@@ -13,33 +13,29 @@ void printMyJobProcess(process_t*p);
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
 
 /* Sets the process group id for a given job and process */
-int set_child_pgid(job_t *j, process_t *p) {
-  
+int set_child_pgid(job_t *j, process_t *p) { 
   if (j->pgid < 0) /* first child: use its pid for job pgid */
     j->pgid = p->pid;
   return(setpgid(p->pid,j->pgid));
 }
 
 /* Creates the context for a new child by setting the pid, pgid and tcsetpgrp */
+void new_child(job_t *j, process_t *p, bool fg) {
+ /* establish a new process group, and put the child in
+  * foreground if requested
+  */
 
-void new_child(job_t *j, process_t *p, bool fg)
-{
-         /* establish a new process group, and put the child in
-          * foreground if requested
-          */
+ /* Put the process into the process group and give the process
+  * group the terminal, if appropriate.  This has to be done both by
+  * the dsh and in the individual child processes because of
+  * potential race conditions.  
+  * */
+  p->pid = getpid();
 
-         /* Put the process into the process group and give the process
-          * group the terminal, if appropriate.  This has to be done both by
-          * the dsh and in the individual child processes because of
-          * potential race conditions.  
-          * */
+  /* also establish child process group in child to avoid race (if parent has not done it yet). */
+  set_child_pgid(j, p);
 
-         p->pid = getpid();
-
-         /* also establish child process group in child to avoid race (if parent has not done it yet). */
-         set_child_pgid(j, p);
-
-         if(fg) // if fg is set
+  if(fg) // if fg is set
     seize_tty(j->pgid); // assign the terminal
 
   /* Set the handling for job control signals back to the default. */
@@ -50,7 +46,7 @@ void new_child(job_t *j, process_t *p, bool fg)
 void logError(char* text) {
    //store completed entry in log
    FILE* logfile = fopen("dsh.log", "a");
-   fprintf(logfile, "Error: (%s) %s", strerror(errno), text);
+   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
    fclose(logfile);
 }
 
@@ -58,20 +54,24 @@ void logError(char* text) {
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
-    dup2(fd, STDIN_FILENO); // do we need to add error checking in case dup2 fails?
+    if (dup2(fd, STDIN_FILENO) < 0){
+      logError("input dup2 failed");
+    }
     close(fd);
   } else {
-    logError("Input file cannot be opened; cannot read\n");
+    logError("input file cannot be opened; cannot read");
   }
 }
 
 void output(process_t *p){
   int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
   if (fd != -1){
-    dup2(fd, STDOUT_FILENO);
+    if (dup2(fd, STDOUT_FILENO) < 0){
+      logError("output dup2 failed");
+    }
     close(fd);
   } else {
-    logError("Output file cannot be opened; cannot write\n");
+    logError("output file cannot be opened; cannot write");
   }
 }
 
@@ -89,15 +89,13 @@ void compiler(process_t *p){
   int status =0;
   pid_t pid;
 
-  // The next 3 lines just make it so that the compiled file name is not always devil.
-  // char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
-  // memcpy(compileFileName, p->argv[0],(strlen(p->argv[0])-2));
-  // compileFileName[(strlen(p->argv[0])-2)] ='\0';
+  // If we wanted to compile each file so that the exec file is called
+  // its own name (rather than always being called "devil"), use these lines:
+  //    char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
+  //    memcpy(compileFileName, p->argv[0],(strlen(p->argv[0])-2));
+  //    compileFileName[(strlen(p->argv[0])-2)] ='\0';
 
-  // printf("this is my filename: %s This is it's size: %lu\n", p->argv[0],strlen(p->argv[0])-2);
-  // printf("this is my compilefilename: %s\n ",compileFileName);
-
-  //built up the gcc argument stuff
+  // Create the arguments required for running gcc
   char **gccArgs = (char**)malloc(sizeof(char*)*5);
   gccArgs[0] = "gcc";
   gccArgs[1] = "-o";
@@ -105,30 +103,21 @@ void compiler(process_t *p){
   gccArgs[3] = p->argv[0];
   gccArgs[4] = '\0';
 
-  //do the fork stuff, similar to the fork thingy in spawn_job
+  // fork to create the devil.exec file
   switch (pid = fork()){
-    case -1:
-      printf("FORK ERRORRRRRRR!!!\n");
-      // LOG ERROR???
+    case -1:  // fork failure
+        perror("fork error in single_process");
+        exit(EXIT_FAILURE);
 
-    case 0:
-      execv("/usr/bin/gcc",gccArgs);
+    case 0:   // child process
+      execv("/usr/bin/gcc", gccArgs);
 
-    default:
+    default: // parent process
       if (waitpid(pid, &status, 0) < 0){
           printf("My error is from the parent waiting\n");
           perror("waitpid");
           exit(EXIT_FAILURE);
-        }
-        // now that child has completed, what shall we do?
-
-      // check exit status (which means what?)
-      // if(WIFEXITED(status)){
-      //     // something with exit status here?
-      //     printf("My error code is: %s\n", strerror(errno));
-      //     // I really don't understand what this does ^^^^^
-      // }
-     
+        }     
   }
   //put the executable files back in to argv[0] AKA replacing the "file.c"
 // <<<<<<< HEAD
@@ -193,64 +182,6 @@ void checkStatus(job_t* j, process_t* p, int status){
 
 }
 
-// void setUpPipe(job_t* j, process_t* p, int input, int output){
-//     //there are 3 cases
-// // printf("this is the first_process it get check the signals ------------\n");
-// // printMyJobProcess( j->first_process);
-// // printf("---------------------------------------------------------------\n");
-// // printf("this is the process it get check the signals ------------\n");
-// // printMyJobProcess( p);
-// // printf("---------------------------------------------------------------\n");
-// // if(p == NULL){
-// //   printf(" p is null \n");
-// // }
-//     // printf("%d\n",p->argc);
-//     printf("in pipe set up input: %d\n", input);
-//     printf("in pipe set up output: %d\n", output );
-//     printf("%s\n",p->argv[0] );
-//     printf("%s\n",p->argv[1] );
-
-// // printf("this is pipe 0 : %d\n",pipeFd[0] );
-// // printf("this is pipe 1 : %d\n",pipeFd[1] );
-//   if(p == j->first_process){
-//     // printf("im in the p = j->first_process\n");
-//     // printf("this is output: %d\n", output);
-//     // dup2(input, STDIN_FILENO);
-//     // close(input);
-//     dup2(output, STDOUT_FILENO);
-//     close(output);
-//   }else
-
-//   if(p->next != NULL && p != j->first_process){
-
-//     // printf("next process is not null\n");
-    
-//     // dup2(input, STDOUT_FILENO);
-//     // close(input);
-//     dup2(input, STDIN_FILENO);
-//     close(input);
-//     dup2(output, STDOUT_FILENO);
-//     close(output);
-
-//   }else{
-//     // printf(" him in the null\n");
-//     dup2(input, STDIN_FILENO);
-//     close(input);
-//     // dup2(output, STDOUT_FILENO);
-//     // close(output);
-
-//   }
-
-//   // if(p->next == NULL){
-//   //   printf("next process is null\n");
-
-//   //   // dup2(STDOUT_FILENO, output);
-//   //   close(output);
-//   //   close(input);
-//   // }
-
-
-// }
 
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
