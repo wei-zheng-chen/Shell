@@ -316,13 +316,18 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  // int jobCounter = 0;
+  int jobCounter = 0;
 
   char* promptMessage;  
-  // char* jobStatus;
+  char* jobStatus;
 
   job_t* current;
   current = headOfJobCollection;
+
+  job_t* temp;
+  temp = NULL;
+  job_t* toRelease;
+  toRelease = NULL;
 
   if(current == NULL){
     promptMessage = "There are not currently any jobs";
@@ -332,18 +337,27 @@ void printJobCollection(){
     // jobs will put jobs in the collection, right?
 
   while(current!=NULL){
+    if(job_is_completed(current)) {
+      jobStatus = "Complete";
+      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      if (temp != NULL) {
+        temp->next = current->next;
+        toRelease = current;
+      } else {
+        toRelease = current;
+        headOfJobCollection = current->next;
+      }
+    }
 
-   
-    // if(current ->notified){
-    //   jobStatus = "(Complete)";
-    // } else {
-    //   jobStatus = "(Running)";
-    // }
-
-    // printf("%d: (%ld) %s %s\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+    else{
+      jobStatus = "Running";
+      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      temp = current;
+    }
 
     current = current->next;
-    // jobCounter ++;
+    free(toRelease);
+    jobCounter ++;
   }
 }
 
