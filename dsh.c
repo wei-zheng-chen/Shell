@@ -158,11 +158,26 @@ void makeParentWait(job_t* j, int status, pid_t pid){
     }
     current = current->next;
   }
+
+
+
+printf("this is my job--------------------------------------------------\n");
+printMyJob(j);
+printf("this is the process before it get check the signals ------------\n");
+printMyJobProcess( p);
+printf("---------------------------------------------------------------\n");
+
+  // printf("hiiiiiiiiii\n");
+
   //check it against the conditions and modifieds
 
   //check if the process exit and said the process are all complete - everything is normal
   if(WIFEXITED(status) == true){
+    printf("process is completed Successfully\n");
+    printf("this is the status: %d\n",status );
+
     p->completed = true;
+
     p->status = 0;
     fflush(stdout);
   }
@@ -170,6 +185,7 @@ void makeParentWait(job_t* j, int status, pid_t pid){
   //check if its stopped by a signal or something
   if(WIFSTOPPED(status)== true){
     printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
+    printf("this is the status: %d\n",status );
     p->stopped = true;
     current->notified = true;
     current->bg = true;
@@ -185,10 +201,13 @@ void makeParentWait(job_t* j, int status, pid_t pid){
   if(WIFSIGNALED(status)==true){
     p->completed = true;
     printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
+    printf("this is the status: %d\n",status );
+
     if(WCOREDUMP(status) == true){
       printf("child is taking a core dump\n");
     }
   }
+
 
   // return tty to the parent
   if(job_is_stopped(j) && isatty(STDIN_FILENO)){
@@ -200,6 +219,9 @@ void makeParentWait(job_t* j, int status, pid_t pid){
 
   //having the code below first so it does return a segfault - figuring out why that is
   //possiblitly - > missing a base case.....
+
+  // return makeParentWait(j,status, pid);
+
   return; // makeParentWait(j,status, pid);
 }
 
@@ -248,6 +270,7 @@ void spawn_job(job_t *j, bool fg){
   }
 
   for(p = j->first_process; p; p = p->next) {
+
     int next[2]; // pipeline for after this current process
     int read = 0;
     int write = 1;
@@ -269,6 +292,7 @@ void spawn_job(job_t *j, bool fg){
 
         setUpPipe(j, p, prev, next, read, write);  
         new_child(j, p, fg);
+
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
           compiler(p);
@@ -294,6 +318,7 @@ void spawn_job(job_t *j, bool fg){
 
         p->pid = pid;
         set_child_pgid(j, p);
+
 
         prev[write] = next[write];
         prev[read] = next[read];
