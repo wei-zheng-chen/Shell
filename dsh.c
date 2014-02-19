@@ -236,7 +236,6 @@ void single_process(job_t *j, bool fg){
         }
   }
 
-  free(j);
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
@@ -284,7 +283,7 @@ void pipeline_process(job_t * j, bool fg){
           close(pipeFd[0]);
           dup2(pipeFd[1], STDOUT_FILENO);
 
-        } else{
+        } else {
           dup2(input, STDIN_FILENO);
           close(pipeFd[0]);
         }
@@ -295,7 +294,7 @@ void pipeline_process(job_t * j, bool fg){
            compiler(p);
         }
 
-        if( execvp(p->argv[0], p->argv) == -1){
+        if(execvp(p->argv[0], p->argv) == -1){
           perror("execvp failed");
         }
         
