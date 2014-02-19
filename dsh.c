@@ -216,10 +216,11 @@ void single_process(job_t *j, bool fg){
           compiler(p);
         }
 
-        // execute the file
+        // execute the command
         execvp(p->argv[0], p->argv);
         
         // once child program completes, this case is done
+        logError("child did not exec appropriately");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -228,10 +229,10 @@ void single_process(job_t *j, bool fg){
         p->pid = pid;
         set_child_pgid(j, p);
 
-
         int status = 0;
         if (waitpid(pid, &status, 0) < 0){
           perror("waitpid");
+          logError("waiting for child failed");
           exit(EXIT_FAILURE);
         }
   }
@@ -247,7 +248,7 @@ void pipeline_process(job_t * j, bool fg){
   int pipeFd[2], input;
   input = pipeFd[0];
 
-  if(strcmp("cat",j->first_process->argv[0])==0){
+  if(strcmp("cat",j->first_process->argv[0]) == 0){
     single_process(j, fg);
   }
 
@@ -291,14 +292,12 @@ void pipeline_process(job_t * j, bool fg){
         redirection(p);
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-           compiler(p);
+          compiler(p);
         }
 
-        if(execvp(p->argv[0], p->argv) == -1){
-          perror("execvp failed");
-        }
-        
-        perror("New child should have done an exec");
+        execvp(p->argv[0], p->argv);
+
+        logError("new child should have done an exec");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
