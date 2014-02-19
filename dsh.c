@@ -138,7 +138,7 @@ void checkStatus(job_t* j, process_t* p, int status){
     printf("process is completed Successfully\n");
     printf("this is the status: %d\n", status);
     p->completed = true;
-    // p->status = status;
+    p->status = status;
    fflush(stdout);
   }
 
@@ -225,16 +225,19 @@ void single_process(job_t *j, bool fg){
         break;    /* NOT REACHED */
 
     default: /* parent */
-        /* establish child process group */
-        p->pid = pid;
-        set_child_pgid(j, p);
+      /* establish child process group */
+      p->pid = pid;
+      set_child_pgid(j, p);
 
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0){
-          perror("waitpid");
-          logError("waiting for child failed");
-          exit(EXIT_FAILURE);
+      if(fg){
+        int cpid;
+        int status;
+
+        while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
+          p = findCurrentProcess(j,cpid);
+          checkStatus(j, p, status);
         }
+      } // end if(fg)
   }
 
   seize_tty(getpid()); // assign the terminal back to dsh
@@ -341,9 +344,8 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  int jobCounter = 0;
+  int jobCounter = 1;
 
-  char* promptMessage;  
   char* jobStatus;
 
   job_t* current;
@@ -356,6 +358,7 @@ void printJobCollection(){
 
   if(current == NULL){
     printf("There are not currently any jobs\n");
+
     return;
   }
 
@@ -389,7 +392,10 @@ void printJobCollection(){
     }
 
     current = current->next;
-    free(toRelease);
+    if( toRelease != NULL){
+      free(toRelease);
+      toRelease = NULL;
+    }
 
     jobCounter ++;
   }
@@ -434,13 +440,14 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
 
     // assume no parameters
     job_t *j = last_job;
-    int pgid;
+    int pgid = j->pgid;
 
     // need to overwrite with actual job information
     if (argc > 1){
       pgid = atoi(argv[1]); // get the pgid from the line
       if(pgid == 0){
         logError("no such pgid number");
+        return true;
       }
       // find the appropriate job in the job list
       job_t *temp = headOfJobCollection;
@@ -584,9 +591,6 @@ int main() {
 			continue; /* NOOP; user entered return or spaces with return */
 		}
 
-    // add the job to the collection of jobs
-    addToJobCollection(j);
-
     // Loop through the jobs listed in the command line
     while(j != NULL){
 
@@ -594,6 +598,9 @@ int main() {
       char** argv = j->first_process->argv;
 
       if(!builtin_cmd(j,argc,argv)){
+        // headOfJobCollection = NULL;
+        // add the job to the collection of jobs
+        addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
       }
 
