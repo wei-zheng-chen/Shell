@@ -85,7 +85,7 @@ void redirection(process_t * p){
 }
 
 // for compiliing c programs
-void compiler(process_t *p){
+void compiler(job_t* j, process_t *p, bool fg){
   int status =0;
   pid_t pid;
 
@@ -110,9 +110,14 @@ void compiler(process_t *p){
         exit(EXIT_FAILURE);
 
     case 0:   // child process
+      p->pid = getpid();      
+      new_child(j, p, fg);
       execv("/usr/bin/gcc", gccArgs);
 
     default: // parent process
+      /* establish child process group */
+      p->pid = pid;
+      set_child_pgid(j, p);
       if (waitpid(pid, &status, 0) < 0){
           perror("waitpid while parent waiting");
           exit(EXIT_FAILURE);
@@ -128,6 +133,7 @@ void compiler(process_t *p){
   //    free(compileFileName);
 
   free(gccArgs);
+  seize_tty(getpid()); // assign the terminal back to dsh
 }
 
 void checkStatus(job_t* j, process_t* p, int status){
@@ -213,7 +219,7 @@ void single_process(job_t *j, bool fg){
         
         // check if argv[0] is a c file and not run with gcc already
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-          compiler(p);
+          compiler(j, p, fg);
         }
 
         // execute the file
@@ -236,7 +242,10 @@ void single_process(job_t *j, bool fg){
         }
   }
 
-  free(j);
+<<<<<<< HEAD
+  // free(j);
+=======
+>>>>>>> 581ecb8d1d70cfec4645b554d79172ee59d7657b
   seize_tty(getpid()); // assign the terminal back to dsh
 }
 
@@ -284,7 +293,7 @@ void pipeline_process(job_t * j, bool fg){
           close(pipeFd[0]);
           dup2(pipeFd[1], STDOUT_FILENO);
 
-        } else{
+        } else {
           dup2(input, STDIN_FILENO);
           close(pipeFd[0]);
         }
@@ -292,10 +301,10 @@ void pipeline_process(job_t * j, bool fg){
         redirection(p);
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-           compiler(p);
+           compiler(j, p, fg);
         }
 
-        if( execvp(p->argv[0], p->argv) == -1){
+        if(execvp(p->argv[0], p->argv) == -1){
           perror("execvp failed");
         }
         
@@ -321,9 +330,8 @@ void pipeline_process(job_t * j, bool fg){
     } // end switch
   } // end for loop
 
-  if(job_is_stopped(j) && isatty(STDIN_FILENO)){
-    seize_tty(getpid());
-  }
+  //if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+  seize_tty(getpid());
 }
 
 void spawn_job(job_t *j, bool fg){
@@ -343,7 +351,7 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  int jobCounter = 0;
+  int jobCounter = 1;
 
   char* promptMessage;  
   char* jobStatus;
@@ -357,9 +365,11 @@ void printJobCollection(){
   toRelease = NULL;
 
   if(current == NULL){
-    printf("There are not currently any jobs\n");
+    promptMessage = "There are not currently any jobs";
+    printf("%s\n", promptMessage);
     return;
-  }
+  } // question: is this ^^ ever possible? since the process of calling
+    // jobs will put jobs in the collection, right?
 
   while(current!=NULL){
     if(job_is_completed(current)) {
@@ -373,26 +383,18 @@ void printJobCollection(){
         headOfJobCollection = current->next;
       }
     }
-   
-    // if(current->notified){
-    //   jobStatus = "(Complete)";
-    // } else {
-    //   jobStatus = "(Running)";
-    // }
 
-    // printf("%d: (%ld) %s %s\n", jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
-
-    // current = current->next;
-
-    else {
+    else{
       jobStatus = "Running";
       printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
       temp = current;
     }
 
     current = current->next;
-    free(toRelease);
-
+    if (toRelease != NULL) {
+      free_job(toRelease);
+      toRelease = NULL;
+    }
     jobCounter ++;
   }
 }
