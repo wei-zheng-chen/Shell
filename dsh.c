@@ -218,28 +218,28 @@ void single_process(job_t *j, bool fg){
           compiler(p);
         }
 
-        // execute the file
+        // execute the command
         execvp(p->argv[0], p->argv);
         
         // once child program completes, this case is done
+        logError("child did not exec appropriately");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
     default: /* parent */
-        /* establish child process group */
-        p->pid = pid;
-        set_child_pgid(j, p);
+      /* establish child process group */
+      p->pid = pid;
+      set_child_pgid(j, p);
 
+      if(fg){
+        int cpid;
+        int status;
 
-        if(fg){
-          int cpid;
-          int status;
-
-          while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
-            p = findCurrentProcess(j,cpid);
-            checkStatus(j, p, status);
-          }
-        } // end if(fg)
+        while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
+          p = findCurrentProcess(j,cpid);
+          checkStatus(j, p, status);
+        }
+      } // end if(fg)
   }
   printf("hi im out side of for loop\n");
   if(fg){
@@ -256,7 +256,7 @@ void pipeline_process(job_t * j, bool fg){
   int pipeFd[2], input;
   input = pipeFd[0];
 
-  if(strcmp("cat",j->first_process->argv[0])==0){
+  if(strcmp("cat",j->first_process->argv[0]) == 0){
     single_process(j, fg);
   }
 
@@ -300,14 +300,12 @@ void pipeline_process(job_t * j, bool fg){
         redirection(p);
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-           compiler(p);
+          compiler(p);
         }
 
-        if(execvp(p->argv[0], p->argv) == -1){
-          perror("execvp failed");
-        }
-        
-        perror("New child should have done an exec");
+        execvp(p->argv[0], p->argv);
+
+        logError("new child should have done an exec");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -355,26 +353,23 @@ void continue_job(job_t *j) {
 void printJobCollection(){
   int jobCounter = 1;
 
-  char* jobStatus;
-
   job_t* current;
   current = headOfJobCollection;
 
-  job_t* temp;
-  temp = NULL;
-  job_t* toRelease;
-  toRelease = NULL;
+  job_t* temp = NULL;
+  job_t* toRelease = NULL;
 
   if(current == NULL){
     printf("There are not currently any jobs\n");
-
     return;
   }
 
-  while(current!=NULL){
-    if(job_is_completed(current)) {
-      jobStatus = "Complete";
-      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+  while(current != NULL){
+    if(job_is_completed(current)) { 
+      // status = complete
+      printf("%d: (Job Number: %ld) %s (Complete)\n", jobCounter, (long)current->pgid, current->commandinfo);
+      
+      // delete this job from the job (linked) list
       if (temp != NULL) {
         temp->next = current->next;
         toRelease = current;
@@ -382,26 +377,17 @@ void printJobCollection(){
         toRelease = current;
         headOfJobCollection = current->next;
       }
-    }
-   
-    // if(current->notified){
-    //   jobStatus = "(Complete)";
-    // } else {
-    //   jobStatus = "(Running)";
-    // }
-
-    // printf("%d: (%ld) %s %s\n", jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
-
-    // current = current->next;
-
-    else {
-      jobStatus = "Running";
-      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      
+    } else { 
+      // status = running
+      printf("%d: (Job Number: %ld) %s (Running)\n", jobCounter, (long)current->pgid, current->commandinfo);
       temp = current;
     }
 
     current = current->next;
-    if( toRelease != NULL){
+
+    // free the completed job
+    if(toRelease != NULL){
       free(toRelease);
       toRelease = NULL;
     }
@@ -599,8 +585,6 @@ int main() {
       }
 			continue; /* NOOP; user entered return or spaces with return */
 		}
-
-   
 
     // Loop through the jobs listed in the command line
     while(j != NULL){
