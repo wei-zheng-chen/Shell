@@ -47,10 +47,11 @@ void new_child(job_t *j, process_t *p, bool fg) {
 
 // Error logging
 void logError(char* text) {
-   //store completed entry in log
-   FILE* logfile = fopen(fileDirectory, "a");
-   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
-   fclose(logfile);
+  perror(text);
+  //store completed entry in log
+  FILE* logfile = fopen(fileDirectory, "a");
+  fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
+  fclose(logfile);
 }
 
 // I/O Redirection - Works
@@ -109,7 +110,7 @@ void compiler(process_t *p){
   // fork to create the devil.exec file
   switch (pid = fork()){
     case -1:  // fork failure
-        perror("fork error in single_process");
+        logError("fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0:   // child process
@@ -117,7 +118,7 @@ void compiler(process_t *p){
 
     default: // parent process
       if (waitpid(pid, &status, 0) < 0){
-        perror("waitpid while parent waiting");
+        logError("waitpid while parent waiting");
         exit(EXIT_FAILURE);
       }
   }
@@ -207,7 +208,7 @@ void single_process(job_t *j, bool fg){
   switch (pid = fork()) {
 
     case -1: /* fork failure */
-        perror("fork error in single_process");
+        logError("fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0: /* child process  */
@@ -265,13 +266,13 @@ void pipeline_process(job_t * j, bool fg){
 
   for(p = j->first_process; p; p = p->next) {
     if(pipe(pipeFd) == -1){
-      perror("pipeline did not work");
+      logError("pipeline did not work");
     }
 
     switch (pid = fork()) {
 
       case -1: /* fork failure */
-        perror("fork");
+        logError("fork");
         exit(EXIT_FAILURE);
 
       case 0: /* child process  */
@@ -338,7 +339,6 @@ void pipeline_process(job_t * j, bool fg){
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care of
   if (j->first_process->next == NULL){
-    printf("hi im in single_process\n");
     single_process(j, fg);
   } else {
     pipeline_process(j, fg);
@@ -348,7 +348,7 @@ void spawn_job(job_t *j, bool fg){
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) {
   if(kill(-j->pgid, SIGCONT) < 0)
-    perror("kill(SIGCONT)");
+    logError("kill(SIGCONT)");
 }
 
 void printJobCollection(){
@@ -416,7 +416,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
     if(argc <= 1 || chdir(argv[1]) == -1) {
-      logError("Improper use of cd\n");
+      logError("improper use of cd");
     }
     return true;
   
