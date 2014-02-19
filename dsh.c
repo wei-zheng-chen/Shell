@@ -582,18 +582,25 @@ void printMyJob(job_t* j){
 //-------------------------------------------------
 
 // create the log file path and name
-void registerCWD(){
-  char cwd[1024];
-  getcwd(cwd, sizeof(cwd));
-  fileDirectory = strcat(cwd, "/dsh.log");
-}
+// void registerCWD(){
+//   char cwd[1024];
+//   getcwd(cwd, sizeof(cwd));
+// <<<<<<< HEAD
+//   fileDirectory = strcat(cwd,"/dsh.log");
+//   logError(cwd);
+// =======
+//   fileDirectory = strcat(cwd, "/dsh.log");
+// >>>>>>> dfff613deb000a9d05bdf2a06cfb1d1d3bb6bde3
+// }
 
 int main() {
 	init_dsh();
   remove("dsh.log"); // clear log file when starting the shell
+  fclose(fopen("dsh.log","a"));
+
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
-  registerCWD();
+  // registerCWD();
 
 	while(1) {
     job_t *j = NULL;
