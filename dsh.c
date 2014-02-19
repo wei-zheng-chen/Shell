@@ -357,7 +357,7 @@ void printJobCollection(){
   int jobCounter = 1;
 
   job_t* current;
-  current = firstJob;
+  current = headOfJobCollection;
 
   job_t* temp = NULL;
   job_t* toRelease = NULL;
@@ -378,7 +378,7 @@ void printJobCollection(){
         toRelease = current;
       } else {
         toRelease = current;
-        firstJob = current->next;
+        headOfJobCollection= current->next;
       }
       
     } else { 
@@ -517,22 +517,8 @@ void addToJobCollection(job_t* j){
   
   if(headOfJobCollection == NULL){
     headOfJobCollection = j;
-    headOfJobCollection->next = NULL;
-    // firstJob = j;
-  
-  } else {
+  } 
 
-    job_t* temp;
-    temp = headOfJobCollection;
-
-    while(temp->next != NULL){
-      temp = temp->next;
-    }
-    // now temp points to the last job in the list
-    // add new jobs to this list of jobs
-    temp->next = j;
-    temp -> next ->next = NULL;
-  }
 }
 
 //for know what the job contains--------TESTING NOT IMPORTANT:
