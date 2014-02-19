@@ -59,11 +59,11 @@ void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
     if (dup2(fd, STDIN_FILENO) < 0){
-      logError("input dup2 failed");
+      logError("Input dup2 failed");
     }
     close(fd);
   } else {
-    logError("input file cannot be opened; cannot read");
+    logError("Input file cannot be opened; cannot read");
   }
 }
 
@@ -71,11 +71,11 @@ void output(process_t *p){
   int fd = open(p->ofile, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
   if (fd != -1){
     if (dup2(fd, STDOUT_FILENO) < 0){
-      logError("output dup2 failed");
+      logError("Output dup2 failed");
     }
     close(fd);
   } else {
-    logError("output file cannot be opened; cannot write");
+    logError("Output file cannot be opened; cannot write");
   }
 }
 
@@ -110,7 +110,7 @@ void compiler(process_t *p){
   // fork to create the devil.exec file
   switch (pid = fork()){
     case -1:  // fork failure
-        logError("fork error in single_process");
+        logError("Fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0:   // child process
@@ -118,7 +118,7 @@ void compiler(process_t *p){
 
     default: // parent process
       if (waitpid(pid, &status, 0) < 0){
-        logError("waitpid while parent waiting");
+        logError("Waitpid failed while parent waiting");
         exit(EXIT_FAILURE);
       }
   }
@@ -194,7 +194,7 @@ process_t* findCurrentProcess(job_t* j , pid_t pid){
   }
 
   if(p == NULL){
-    logError("searching for pid that doesn't exist");
+    logError("Searching for pid that doesn't exist");
   }
 
   return p;
@@ -208,7 +208,7 @@ void single_process(job_t *j, bool fg){
   switch (pid = fork()) {
 
     case -1: /* fork failure */
-        logError("fork error in single_process");
+        logError("Fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0: /* child process  */
@@ -227,7 +227,7 @@ void single_process(job_t *j, bool fg){
         execvp(p->argv[0], p->argv);
         
         // once child program completes, this case is done
-        logError("child did not exec appropriately");
+        logError("Child did not exec appropriately");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -247,8 +247,7 @@ void single_process(job_t *j, bool fg){
       } // end if(fg)
   }
   if(fg){
-    printf("im about to seize_tty: %d\n", getpid());
-   seize_tty(getpid()); // assign the terminal back to ds
+    seize_tty(getpid()); // assign the terminal back to ds
   }
 }
 
@@ -266,13 +265,13 @@ void pipeline_process(job_t * j, bool fg){
 
   for(p = j->first_process; p; p = p->next) {
     if(pipe(pipeFd) == -1){
-      logError("pipeline did not work");
+      logError("Pipeline did not work");
     }
 
     switch (pid = fork()) {
 
       case -1: /* fork failure */
-        logError("fork");
+        logError("Fork error in pipeline_process");
         exit(EXIT_FAILURE);
 
       case 0: /* child process  */
@@ -309,7 +308,7 @@ void pipeline_process(job_t * j, bool fg){
 
         execvp(p->argv[0], p->argv);
 
-        logError("new child should have done an exec");
+        logError("New child should have done an exec");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -348,7 +347,7 @@ void spawn_job(job_t *j, bool fg){
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) {
   if(kill(-j->pgid, SIGCONT) < 0)
-    logError("kill(SIGCONT)");
+    logError("Kill(SIGCONT)");
 }
 
 void printJobCollection(){
@@ -416,7 +415,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
     if(argc <= 1 || chdir(argv[1]) == -1) {
-      logError("improper use of cd");
+      logError("Improper use of cd");
     }
     return true;
   
@@ -439,7 +438,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
     if (argc > 1){
       pgid = atoi(argv[1]); // get the pgid from the line
       if(pgid == 0){
-        logError("no such pgid number");
+        logError("No such pgid number");
         return true;
       }
       // find the appropriate job in the job list
@@ -449,7 +448,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
       }
       // that pgid number does not exist
       if(temp == NULL){
-        logError("job did not exist");
+        logError("Job did not exist");
         return true;
       }
       j = temp;
@@ -567,12 +566,14 @@ void printMyJob(job_t* j){
   }
 }
 
+//-------------------------------------------------
+
+// create the log file path and name
 void registerCWD(){
   char cwd[1024];
   getcwd(cwd, sizeof(cwd));
-  fileDirectory = strcat(cwd,"/dsh.log");
+  fileDirectory = strcat(cwd, "/dsh.log");
 }
-//-------------------------------------------------
 
 int main() {
 	init_dsh();
