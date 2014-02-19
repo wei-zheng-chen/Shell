@@ -5,22 +5,18 @@
 /*************************
  * Team Info & Time spent
  *************************/
-/*
-	Edit this to list all group members and time spent.
-	Please follow the format or our scripts will break. 
-*/
 
 	Name1: Wei Chen
-	NetId1: 
-	Time spent: 10 hours
+	NetId1: wc82
+	Time spent: 20 hours
 
 	Name2: Chelsea Wezensky
 	NetId2: clw33
-	Time spent: 10 hours
+	Time spent: 20 hours
 
 	Name3: William Johnston
-	NetId3:
-	Time spent: 10 hours
+	NetId3: wpj2
+	Time spent: 20 hours
 
 /******************
  * Files to submit
@@ -77,10 +73,8 @@ spawn a new job (in SPAWN_JOB). A pipeline is created
  * Feedback on the lab
  ************************/
 
-/*
- * Any comments/questions/suggestions/experiences that you would help us to
- * improve the lab.
- * */
+
+
 
 /************************
  * References
