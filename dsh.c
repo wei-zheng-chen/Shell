@@ -141,7 +141,8 @@ void checkStatus(job_t* j, process_t* p, int status){
     printf("process is completed Successfully\n");
     printf("this is the status: %d\n", status);
     p->completed = true;
-    // p->status = status;
+    p->status = status;
+
    fflush(stdout);
   }
 
@@ -171,6 +172,7 @@ void checkStatus(job_t* j, process_t* p, int status){
     }
   }
 }
+
 
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
@@ -219,27 +221,34 @@ void single_process(job_t *j, bool fg){
           compiler(p);
         }
 
-        // execute the file
+        // execute the command
         execvp(p->argv[0], p->argv);
         
         // once child program completes, this case is done
+        logError("child did not exec appropriately");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
     default: /* parent */
-        /* establish child process group */
-        p->pid = pid;
-        set_child_pgid(j, p);
+      /* establish child process group */
+      p->pid = pid;
+      set_child_pgid(j, p);
 
+      if(fg){
+        int cpid;
+        int status;
 
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0){
-          perror("waitpid");
-          exit(EXIT_FAILURE);
+        while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
+          p = findCurrentProcess(j,cpid);
+          checkStatus(j, p, status);
         }
+      } // end if(fg)
   }
-
-  seize_tty(getpid()); // assign the terminal back to dsh
+  printf("hi im out side of for loop\n");
+  if(fg){
+    printf("im about to seize_tty: %d\n", getpid());
+   seize_tty(getpid()); // assign the terminal back to ds
+  }
 }
 
 void pipeline_process(job_t * j, bool fg){
@@ -250,7 +259,7 @@ void pipeline_process(job_t * j, bool fg){
   int pipeFd[2], input;
   input = pipeFd[0];
 
-  if(strcmp("cat",j->first_process->argv[0])==0){
+  if(strcmp("cat",j->first_process->argv[0]) == 0){
     single_process(j, fg);
   }
 
@@ -294,14 +303,12 @@ void pipeline_process(job_t * j, bool fg){
         redirection(p);
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-           compiler(p);
+          compiler(p);
         }
 
-        if(execvp(p->argv[0], p->argv) == -1){
-          perror("execvp failed");
-        }
-        
-        perror("New child should have done an exec");
+        execvp(p->argv[0], p->argv);
+
+        logError("new child should have done an exec");
         exit(EXIT_FAILURE);  /* NOT REACHED */
         break;    /* NOT REACHED */
 
@@ -331,8 +338,10 @@ void pipeline_process(job_t * j, bool fg){
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care of
   if (j->first_process->next == NULL){
+    printf("hi im in single_process\n");
     single_process(j, fg);
    } else {
+    printf("hi im in pipeline_processs\n");
     pipeline_process(j, fg);
    }
 }
@@ -347,26 +356,23 @@ void continue_job(job_t *j) {
 void printJobCollection(){
   int jobCounter = 1;
 
-  char* jobStatus;
-
   job_t* current;
   current = firstJob;
 
-  job_t* temp;
-  temp = NULL;
-  job_t* toRelease;
-  toRelease = NULL;
+  job_t* temp = NULL;
+  job_t* toRelease = NULL;
 
   if(current == NULL){
     printf("There are not currently any jobs\n");
-
     return;
   }
 
-  while(current!=NULL){
-    if(job_is_completed(current)) {
-      jobStatus = "Complete";
-      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+  while(current != NULL){
+    if(job_is_completed(current)) { 
+      // status = complete
+      printf("%d: (Job Number: %ld) %s (Complete)\n", jobCounter, (long)current->pgid, current->commandinfo);
+      
+      // delete this job from the job (linked) list
       if (temp != NULL) {
         temp->next = current->next;
         toRelease = current;
@@ -374,15 +380,17 @@ void printJobCollection(){
         toRelease = current;
         firstJob = current->next;
       }
-    }
-    else {
-      jobStatus = "Running";
-      printf("%d: (Job Number:%ld) %s (%s)\n",jobCounter,(long)current->pgid, current->commandinfo, jobStatus);
+      
+    } else { 
+      // status = running
+      printf("%d: (Job Number: %ld) %s (Running)\n", jobCounter, (long)current->pgid, current->commandinfo);
       temp = current;
     }
 
     current = current->next;
-    if( toRelease != NULL){
+
+    // free the completed job
+    if(toRelease != NULL){
       free(toRelease);
       toRelease = NULL;
     }
@@ -589,8 +597,6 @@ int main() {
 			continue; /* NOOP; user entered return or spaces with return */
 		}
 
-   
-
     // Loop through the jobs listed in the command line
     while(j != NULL){
 
@@ -598,7 +604,7 @@ int main() {
       char** argv = j->first_process->argv;
 
       if(!builtin_cmd(j,argc,argv)){
-        // headOfJobCollection = NULL;
+        headOfJobCollection = NULL;
         // add the job to the collection of jobs
         addToJobCollection(j);
         spawn_job(j,!(j->bg)); 

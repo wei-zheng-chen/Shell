@@ -113,11 +113,13 @@ void seize_tty(pid_t callingprocess_pgid)
 	/* Grab control of the terminal.  */
 	/* Don't call this until other initialization is complete */
   if (dsh_is_interactive) {
+  	// printf("hiiii im in helper\n");
 	if(tcsetpgrp(STDIN_FILENO, callingprocess_pgid) < 0) {
 		printf("this is the calling progress id %d\n",callingprocess_pgid );
 		perror("tcsetpgrp failure (see note in the lab2 FAQ)");
 		exit(EXIT_FAILURE);
 	}
+	// printf("i succeeded\n");
   }
 }
 
