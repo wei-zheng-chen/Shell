@@ -282,7 +282,7 @@ void pipeline_process(job_t * j, bool fg){
   int pipeFd[2], input;
   input = pipeFd[0];
 
-  if(strcmp("cat",j->first_process->argv[0]) == 0){
+  if(strcmp("cat",j->first_process->argv[0]) == 0 && strcmp("cat", j->first_process->next->argv[0])==0){
     single_process(j, fg);
   }
 
