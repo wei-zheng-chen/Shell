@@ -47,10 +47,20 @@ void new_child(job_t *j, process_t *p, bool fg) {
 
 // Error logging
 void logError(char* text) {
+  // print error
   perror(text);
-  //store completed entry in log
-  FILE* logfile = fopen(fileDirectory, "a");
+  // store completed entry in log
+  FILE* logfile = fopen("dsh.log", "a");
   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
+  fclose(logfile);
+}
+
+void logStatus(long pid, char* status, char* name){
+  // print status
+  printf("%ld (%s): %s\n", pid, status, name);
+  // store completed entry in log
+  FILE* logfile = fopen("dsh.log", "a");
+  fprintf(logfile, "%ld (%s): %s\n", pid, status, name);
   fclose(logfile);
 }
 
@@ -117,6 +127,9 @@ void compiler(process_t *p){
       execv("/usr/bin/gcc", gccArgs);
 
     default: // parent process
+      // add job change to log file
+      logStatus((long)p->pid, "Launched", "./devil");
+
       if (waitpid(pid, &status, 0) < 0){
         logError("Waitpid failed while parent waiting");
         exit(EXIT_FAILURE);
@@ -146,8 +159,12 @@ void checkStatus(job_t* j, process_t* p, int status){
 
   // check if its stopped by a signal
   else if(WIFSTOPPED(status)== true){
-    printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
-    printf("this is the status: %d\n",status );
+    char str[100];
+    sprintf(str, "The process has stopped due to this signal: %d\n", WSTOPSIG(status));
+    sprintf(str, "The current status is: %d", status);
+    logError(str);
+    // printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
+    // printf("this is the status: %d\n",status );
     p->stopped = true;
     j->notified = true;
     j->bg = true;
@@ -162,8 +179,12 @@ void checkStatus(job_t* j, process_t* p, int status){
   // Check if the child's process is terminated by the terminal
   else if(WIFSIGNALED(status)==true){
     p->completed = true;
-    printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
-    printf("this is the status: %d\n",status );
+    char str[100];
+    sprintf(str, "The process has terminated due to this signal: %d\n", WTERMSIG(status));
+    sprintf(str, "The current status is: %d", status);
+    logError(str);
+    // printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
+    // printf("this is the status: %d\n",status );
 
     if(WCOREDUMP(status) == true){
       printf("child is taking a core dump\n");
@@ -214,7 +235,9 @@ void single_process(job_t *j, bool fg){
     case 0: /* child process  */
         p->pid = getpid();      
         new_child(j, p, fg);
-        
+        // add job change to log file
+        logStatus((long)j->first_process->pid, "Launched", j->commandinfo);
+
         // set up the programming environment!
         redirection(p);
         
@@ -277,6 +300,8 @@ void pipeline_process(job_t * j, bool fg){
       case 0: /* child process  */
         p->pid = getpid();   
         set_child_pgid(j, p);
+        // add job change to log file
+        logStatus((long)j->first_process->pid, "Launched", j->commandinfo);
 
         if(fg){ // if fg is set
           if(job_is_stopped(j) && isatty(STDIN_FILENO)){
@@ -326,7 +351,7 @@ void pipeline_process(job_t * j, bool fg){
             p = findCurrentProcess(j,cpid);
             checkStatus(j, p, status);
           }
-        } // end if(fg)
+        } // end if(fg)s
     } // end switch
   } // end for loop
 
@@ -350,6 +375,8 @@ void continue_job(job_t *j) {
     logError("Kill(SIGCONT)");
 }
 
+
+// TODO: ADD STOPPED OPTION
 void printJobCollection(){
   int jobCounter = 1;
 
@@ -582,7 +609,6 @@ int main() {
 
     // Loop through the jobs listed in the command line
     while(j != NULL){
-
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
 
@@ -591,6 +617,9 @@ int main() {
         // add the job to the collection of jobs
         addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
+      } else {
+        // add job change to log file
+        logStatus((long)j->first_process->pid, "Launched", j->commandinfo);
       }
 
       j = j->next;
