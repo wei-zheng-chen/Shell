@@ -49,7 +49,7 @@ void new_child(job_t *j, process_t *p, bool fg) {
 void logError(char* text) {
   perror(text);
   //store completed entry in log
-  FILE* logfile = fopen(fileDirectory, "a");
+  FILE* logfile = fopen("dsh.log", "a");
   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
   fclose(logfile);
 }
@@ -557,15 +557,18 @@ void registerCWD(){
   char cwd[1024];
   getcwd(cwd, sizeof(cwd));
   fileDirectory = strcat(cwd,"/dsh.log");
+  logError(cwd);
 }
 //-------------------------------------------------
 
 int main() {
 	init_dsh();
   remove("dsh.log"); // clear log file when starting the shell
+  fclose(fopen("dsh.log","a"));
+
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
-  registerCWD();
+  // registerCWD();
 
 	while(1) {
     job_t *j = NULL;
