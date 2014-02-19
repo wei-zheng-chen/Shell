@@ -47,10 +47,11 @@ void new_child(job_t *j, process_t *p, bool fg) {
 
 // Error logging
 void logError(char* text) {
-   //store completed entry in log
-   FILE* logfile = fopen(fileDirectory, "a");
-   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
-   fclose(logfile);
+  perror(text);
+  //store completed entry in log
+  FILE* logfile = fopen(fileDirectory, "a");
+  fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
+  fclose(logfile);
 }
 
 // I/O Redirection - Works
@@ -99,7 +100,7 @@ void compiler(process_t *p){
   //    compileFileName[(strlen(p->argv[0])-2)] ='\0';
 
   // Create the arguments required for running gcc
-  char **gccArgs = (char**)malloc(sizeof(char*)*5);
+  char **gccArgs = (char**) malloc(sizeof(char*) * 5);
   gccArgs[0] = "gcc";
   gccArgs[1] = "-o";
   gccArgs[2] = "devil"; //compileFileName;
@@ -109,7 +110,7 @@ void compiler(process_t *p){
   // fork to create the devil.exec file
   switch (pid = fork()){
     case -1:  // fork failure
-        perror("fork error in single_process");
+        logError("fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0:   // child process
@@ -117,9 +118,9 @@ void compiler(process_t *p){
 
     default: // parent process
       if (waitpid(pid, &status, 0) < 0){
-          perror("waitpid while parent waiting");
-          exit(EXIT_FAILURE);
-        }     
+        logError("waitpid while parent waiting");
+        exit(EXIT_FAILURE);
+      }
   }
 
   // reconstruct the arg so that it would be able to run in the 
@@ -138,12 +139,9 @@ void checkStatus(job_t* j, process_t* p, int status){
   // check if the process exit and said the process are all complete
   // everything is normal
   if(WIFEXITED(status) == true){
-    printf("process is completed Successfully\n");
-    printf("this is the status: %d\n", status);
     p->completed = true;
     p->status = status;
-
-   fflush(stdout);
+    fflush(stdout);
   }
 
   // check if its stopped by a signal
@@ -177,22 +175,26 @@ void checkStatus(job_t* j, process_t* p, int status){
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
   job_t *current = j;
-  process_t * p;
+  process_t * p = NULL;
 
   while(current != NULL){
-    process_t* currentProcess = current -> first_process;
-    while( currentProcess != NULL){
-      if(currentProcess -> pid == pid){
-      p = currentProcess;
-      innerWhileBreak = 1;
-      break;
+    process_t* currentProcess = current->first_process;
+    while(currentProcess != NULL){
+      if(currentProcess->pid == pid){
+        p = currentProcess;
+        innerWhileBreak = 1;
+        break;
       }
       currentProcess = currentProcess->next;
     }
     if(innerWhileBreak == 1){
-        break;
+      break;
     }
-    current = current -> next;
+    current = current->next;
+  }
+
+  if(p == NULL){
+    logError("searching for pid that doesn't exist");
   }
 
   return p;
@@ -206,7 +208,7 @@ void single_process(job_t *j, bool fg){
   switch (pid = fork()) {
 
     case -1: /* fork failure */
-        perror("fork error in single_process");
+        logError("fork error in single_process");
         exit(EXIT_FAILURE);
 
     case 0: /* child process  */
@@ -239,12 +241,11 @@ void single_process(job_t *j, bool fg){
         int status;
 
         while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
-          p = findCurrentProcess(j,cpid);
+          p = findCurrentProcess(j, cpid);
           checkStatus(j, p, status);
         }
       } // end if(fg)
   }
-  printf("hi im out side of for loop\n");
   if(fg){
     printf("im about to seize_tty: %d\n", getpid());
    seize_tty(getpid()); // assign the terminal back to ds
@@ -265,13 +266,13 @@ void pipeline_process(job_t * j, bool fg){
 
   for(p = j->first_process; p; p = p->next) {
     if(pipe(pipeFd) == -1){
-      perror("pipeline did not work");
+      logError("pipeline did not work");
     }
 
     switch (pid = fork()) {
 
       case -1: /* fork failure */
-        perror("fork");
+        logError("fork");
         exit(EXIT_FAILURE);
 
       case 0: /* child process  */
@@ -281,7 +282,7 @@ void pipeline_process(job_t * j, bool fg){
         if(fg){ // if fg is set
           if(job_is_stopped(j) && isatty(STDIN_FILENO)){
             seize_tty(j->pgid); // assign the terminal
-            // Set the handling for job control signals back to the default.
+            // Set the handling for job control signals back to the default
             signal(SIGTTOU, SIG_DFL);
           }
         }
@@ -322,7 +323,7 @@ void pipeline_process(job_t * j, bool fg){
           int cpid;
           int status;
 
-          while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
+          while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED)) > 0){
             p = findCurrentProcess(j,cpid);
             checkStatus(j, p, status);
           }
@@ -338,19 +339,16 @@ void pipeline_process(job_t * j, bool fg){
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care of
   if (j->first_process->next == NULL){
-    printf("hi im in single_process\n");
     single_process(j, fg);
-   } else {
-    printf("hi im in pipeline_processs\n");
+  } else {
     pipeline_process(j, fg);
-   }
+  }
 }
 
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) {
   if(kill(-j->pgid, SIGCONT) < 0)
-    perror("kill(SIGCONT)");
-  // Should we add an error message to STDERR?
+    logError("kill(SIGCONT)");
 }
 
 void printJobCollection(){
@@ -380,7 +378,7 @@ void printJobCollection(){
         toRelease = current;
         headOfJobCollection= current->next;
       }
-      
+
     } else { 
       // status = running
       printf("%d: (Job Number: %ld) %s (Running)\n", jobCounter, (long)current->pgid, current->commandinfo);
@@ -398,9 +396,6 @@ void printJobCollection(){
     jobCounter ++;
   }
 }
-
-//ATTENTION: NEEDS TO IMPLEMENT - GETTING RID OF COMPLETED JOBS IN 
-//           THE JOB BANK
 
 /* 
  * builtin_cmd - If the user has typed a built-in command,
@@ -421,7 +416,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   // Are we changing directories?
   } else if (!strcmp("cd", argv[0])) {
     if(argc <= 1 || chdir(argv[1]) == -1) {
-      logError("Improper use of cd\n");
+      logError("improper use of cd");
     }
     return true;
   
@@ -521,7 +516,7 @@ void addToJobCollection(job_t* j){
 
 }
 
-//for know what the job contains--------TESTING NOT IMPORTANT:
+// so we know what the job contains--TESTING NOT IMPORTANT:
 void printMyJobProcess(process_t * p){
   if(p == NULL){
     return;
@@ -566,7 +561,6 @@ void registerCWD(){
 //-------------------------------------------------
 
 int main() {
-
 	init_dsh();
   remove("dsh.log"); // clear log file when starting the shell
 	DEBUG("Successfully initialized\n");
