@@ -130,7 +130,6 @@ void compiler(process_t *p){
   free(gccArgs);
 }
 
-
 void checkStatus(job_t* j, process_t* p, int status){
 
   // check if the process exit and said the process are all complete
@@ -192,7 +191,6 @@ process_t* findCurrentProcess(job_t* j , pid_t pid){
   }
 
   return p;
-
 }
 
 void single_process(job_t *j, bool fg){
@@ -276,24 +274,19 @@ void pipeline_process(job_t * j, bool fg){
             signal(SIGTTOU, SIG_DFL);
           }
         }
-        
-        if(p == j->first_process && p->next == NULL){
-          close(pipeFd[0]);
-          close(pipeFd[1]);
-        }
 
-        if(p != j->first_process || (p == j->first_process && p->next != NULL)){
-          if( p == j->first_process){
-            close(pipeFd[0]);
-            dup2(pipeFd[1], STDOUT_FILENO);
-          } else if (p->next != NULL){
-            dup2(input, STDIN_FILENO);
-            close(pipeFd[0]);
-            dup2(pipeFd[1],1);
-          } else{
-            dup2(input,0);
-            close(pipeFd[0]);
-          }
+        if(p == j->first_process){
+          close(pipeFd[0]);
+          dup2(pipeFd[1], STDOUT_FILENO);
+
+        } else if(p->next != NULL){
+          dup2(input, STDIN_FILENO);
+          close(pipeFd[0]);
+          dup2(pipeFd[1], STDOUT_FILENO);
+
+        } else{
+          dup2(input, STDIN_FILENO);
+          close(pipeFd[0]);
         }
 
         redirection(p);
@@ -536,7 +529,7 @@ void addToJobCollection(job_t* j){
   }
 }
 
-//for know what the hell job it contains--------TESTING NOT IMPORTANT:
+//for know what the job contains--------TESTING NOT IMPORTANT:
 void printMyJobProcess(process_t * p){
   if(p == NULL){
     return;
