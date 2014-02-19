@@ -11,6 +11,9 @@ void printMyJobProcess(process_t*p);
 //-------------------------------------------/
 
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
+job_t* firstJob;
+char* fileDirectory;
+
 
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p) { 
@@ -44,8 +47,8 @@ void new_child(job_t *j, process_t *p, bool fg) {
 
 // Error logging
 void logError(char* text) {
-   // TODO: store completed entry in log
-   FILE* logfile = fopen("dsh.log", "a");
+   //store completed entry in log
+   FILE* logfile = fopen(fileDirectory, "a");
    fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
    fclose(logfile);
 }
@@ -167,6 +170,7 @@ void checkStatus(job_t* j, process_t* p, int status){
   }
 }
 
+
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
   job_t *current = j;
@@ -240,9 +244,11 @@ void single_process(job_t *j, bool fg){
           checkStatus(j, p, status);
         }
       } // end if(fg)
-  } // end switch
-
-  seize_tty(getpid()); // assign the terminal back to dsh
+  }
+  if(fg){
+    printf("im about to seize_tty: %d\n", getpid());
+   seize_tty(getpid()); // assign the terminal back to ds
+  }
 }
 
 void pipeline_process(job_t * j, bool fg){
@@ -332,6 +338,7 @@ void pipeline_process(job_t * j, bool fg){
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care of
   if (j->first_process->next == NULL){
+    printf("hi im in single_process\n");
     single_process(j, fg);
   } else {
     pipeline_process(j, fg);
@@ -348,7 +355,7 @@ void printJobCollection(){
   int jobCounter = 1;
 
   job_t* current;
-  current = headOfJobCollection;
+  current = firstJob;
 
   job_t* temp = NULL;
   job_t* toRelease = NULL;
@@ -369,7 +376,7 @@ void printJobCollection(){
         toRelease = current;
       } else {
         toRelease = current;
-        headOfJobCollection = current->next;
+        firstJob = current->next;
       }
 
     } else { 
@@ -505,6 +512,8 @@ void addToJobCollection(job_t* j){
   
   if(headOfJobCollection == NULL){
     headOfJobCollection = j;
+    headOfJobCollection->next = NULL;
+    // firstJob = j;
   
   } else {
 
@@ -517,6 +526,7 @@ void addToJobCollection(job_t* j){
     // now temp points to the last job in the list
     // add new jobs to this list of jobs
     temp->next = j;
+    temp -> next ->next = NULL;
   }
 }
 
@@ -556,6 +566,12 @@ void printMyJob(job_t* j){
     current = current->next;
   }
 }
+
+void registerCWD(){
+  char cwd[1024];
+  getcwd(cwd, sizeof(cwd));
+  fileDirectory = strcat(cwd,"/dsh.log");
+}
 //-------------------------------------------------
 
 int main() {
@@ -563,6 +579,7 @@ int main() {
   remove("dsh.log"); // clear log file when starting the shell
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
+  registerCWD();
 
 	while(1) {
     job_t *j = NULL;
