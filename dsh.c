@@ -517,7 +517,8 @@ void addToJobCollection(job_t* j){
   
   if(headOfJobCollection == NULL){
     headOfJobCollection = j;
-    firstJob = j;
+    headOfJobCollection->next = NULL;
+    // firstJob = j;
   
   } else {
 
@@ -530,6 +531,7 @@ void addToJobCollection(job_t* j){
     // now temp points to the last job in the list
     // add new jobs to this list of jobs
     temp->next = j;
+    temp -> next ->next = NULL;
   }
 }
 
@@ -604,7 +606,7 @@ int main() {
       char** argv = j->first_process->argv;
 
       if(!builtin_cmd(j,argc,argv)){
-        headOfJobCollection = NULL;
+        // headOfJobCollection = NULL;
         // add the job to the collection of jobs
         addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
