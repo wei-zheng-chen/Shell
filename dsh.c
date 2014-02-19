@@ -138,7 +138,7 @@ void checkStatus(job_t* j, process_t* p, int status){
     printf("process is completed Successfully\n");
     printf("this is the status: %d\n", status);
     p->completed = true;
-    // p->status = status;
+    p->status = status;
    fflush(stdout);
   }
 
@@ -229,11 +229,15 @@ void single_process(job_t *j, bool fg){
         set_child_pgid(j, p);
 
 
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0){
-          perror("waitpid");
-          exit(EXIT_FAILURE);
-        }
+        if(fg){
+          int cpid;
+          int status;
+
+          while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
+            p = findCurrentProcess(j,cpid);
+            checkStatus(j, p, status);
+          }
+        } // end if(fg)
   }
 
   seize_tty(getpid()); // assign the terminal back to dsh
