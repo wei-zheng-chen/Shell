@@ -139,6 +139,7 @@ void checkStatus(job_t* j, process_t* p, int status){
     printf("this is the status: %d\n", status);
     p->completed = true;
     p->status = status;
+
    fflush(stdout);
   }
 
@@ -168,6 +169,7 @@ void checkStatus(job_t* j, process_t* p, int status){
     }
   }
 }
+
 
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
@@ -239,8 +241,11 @@ void single_process(job_t *j, bool fg){
           }
         } // end if(fg)
   }
-
-  seize_tty(getpid()); // assign the terminal back to dsh
+  printf("hi im out side of for loop\n");
+  if(fg){
+    printf("im about to seize_tty: %d\n", getpid());
+   seize_tty(getpid()); // assign the terminal back to ds
+  }
 }
 
 void pipeline_process(job_t * j, bool fg){
@@ -332,8 +337,10 @@ void pipeline_process(job_t * j, bool fg){
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care of
   if (j->first_process->next == NULL){
+    printf("hi im in single_process\n");
     single_process(j, fg);
    } else {
+    printf("hi im in pipeline_processs\n");
     pipeline_process(j, fg);
    }
 }
@@ -602,7 +609,7 @@ int main() {
       char** argv = j->first_process->argv;
 
       if(!builtin_cmd(j,argc,argv)){
-        // headOfJobCollection = NULL;
+        headOfJobCollection = NULL;
         // add the job to the collection of jobs
         addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
