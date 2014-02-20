@@ -289,10 +289,6 @@ void pipeline_process(job_t * j, bool fg){
   int pipeFd[2], input;
   input = pipeFd[0];
 
-  if(strcmp("cat",j->first_process->argv[0]) == 0 && strcmp("cat", j->first_process->next->argv[0])==0){
-    single_process(j, fg);
-  }
-
   for(p = j->first_process; p; p = p->next) {
     if(pipe(pipeFd) == -1){
       logError("Pipeline did not work");
@@ -370,7 +366,15 @@ void pipeline_process(job_t * j, bool fg){
 
 void spawn_job(job_t *j, bool fg){
   // Builtin commands are already taken care of
-  if (j->first_process->next == NULL){
+  
+  if (j->first_process->next == NULL || (strcmp("cat",j->first_process->argv[0]) == 0 && strcmp("cat", j->first_process->next->argv[0])==0)){
+    if(j->first_process->next != NULL){
+      if( (strcmp("cat",j->first_process->argv[0]) == 0 && strcmp("cat", j->first_process->next->argv[0])==0)){
+        j->first_process->next =NULL;
+      }else{
+        pipeline_process(j,fg);
+      }
+    }
     single_process(j, fg);
   } else {
     pipeline_process(j, fg);
