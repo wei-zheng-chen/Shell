@@ -14,7 +14,17 @@ char* fileDirectory;
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
 job_t* firstJob;
 
-
+void addToJobCollection(job_t* j){
+  if(headOfJobCollection == NULL){
+    headOfJobCollection = j;
+  } else {
+    job_t *temp = headOfJobCollection;
+    while (temp->next != NULL){
+      temp = temp->next;
+    }
+    temp->next = j;
+  }
+}
 
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p) { 
@@ -56,6 +66,7 @@ void logError(char* text) {
   fclose(logfile);
 }
 
+// Status logging
 void logStatus(long pid, char* status, char* name){
   // print status
   printf("%ld (%s): %s\n", pid, status, name);
@@ -65,7 +76,7 @@ void logStatus(long pid, char* status, char* name){
   fclose(logfile);
 }
 
-// I/O Redirection - Works
+// I/O Redirection
 void input(process_t*p){
   int fd = open(p->ifile, O_RDONLY);
   if (fd != -1){
@@ -100,9 +111,11 @@ void redirection(process_t * p){
 }
 
 // for compiliing c programs
-void compiler(process_t *p){
+void compiler(job_t *j, process_t *p){
   int status =0;
   pid_t pid;
+
+  addToJobCollection(j);
 
   // if we wanted to compile each file so that the exec file is called
   // its own name (rather than always being called "devil"), use these lines:
@@ -125,12 +138,20 @@ void compiler(process_t *p){
         exit(EXIT_FAILURE);
 
     case 0:   // child process
-      execv("/usr/bin/gcc", gccArgs);
+      p->pid = pid;
+      new_child(j, p, true);
 
-    default: // parent process
       // add job change to log file
       logStatus((long)p->pid, "Launched", "./devil");
 
+      execv("/usr/bin/gcc", gccArgs);
+
+      // once child program completes, this case is done
+      logError("Child did not exec appropriately");
+      exit(EXIT_FAILURE);  /* NOT REACHED */
+      break;    /* NOT REACHED */
+
+    default: // parent process
       if (waitpid(pid, &status, 0) < 0){
         logError("Waitpid failed while parent waiting");
         exit(EXIT_FAILURE);
@@ -244,7 +265,7 @@ void single_process(job_t *j, bool fg){
         
         // check if argv[0] is a c file and not run with gcc already
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-          compiler(p);
+          compiler(j, p);
         }
 
         // execute the command
@@ -333,7 +354,7 @@ void pipeline_process(job_t * j, bool fg){
         redirection(p);
 
         if (strstr(p->argv[0], ".c") != NULL && strstr(p->argv[0], "gcc ") == NULL){
-          compiler(p);
+          compiler(j, p);
         }
 
         execvp(p->argv[0], p->argv);
@@ -380,8 +401,6 @@ void continue_job(job_t *j) {
     logError("Kill(SIGCONT)");
 }
 
-
-// TODO: ADD STOPPED OPTION
 void printJobCollection(){
   int jobCounter = 1;
 
@@ -397,10 +416,8 @@ void printJobCollection(){
   }
 
   while(current != NULL){
-    if(job_is_completed(current)) { 
-      // status = complete
-      printf("%d: (Job Number: %ld) %s (Complete)\n", jobCounter, (long)current->pgid, current->commandinfo);
-      
+    printf("%s\n", current->first_process->argc);
+    if(strcmp("jobs", current->first_process->argv[0]) || strcmp("cd", current->first_process->argv[0]) || strcmp("fg", current->first_process->argv[0]) || strcmp("bg", current->first_process->argv[0])){
       // delete this job from the job (linked) list
       if (temp != NULL) {
         temp->next = current->next;
@@ -409,6 +426,29 @@ void printJobCollection(){
         toRelease = current;
         headOfJobCollection= current->next;
       }
+    } else if(job_is_completed(current)) { 
+      // status = complete
+      printf("%d: (Job Number: %ld) %s (Complete)\n", jobCounter, (long)current->pgid, current->commandinfo);
+      
+      // add job change to log file
+      logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
+
+      // delete this job from the job (linked) list
+      if (temp != NULL) {
+        temp->next = current->next;
+        toRelease = current;
+      } else {
+        toRelease = current;
+        headOfJobCollection= current->next;
+      }
+
+    } else if (job_is_stopped(current)){
+      // status = stopped
+      printf("%d: (Job Number: %ld) %s (Stopped)\n", jobCounter, (long)current->pgid, current->commandinfo);
+      temp = current;
+
+      // add job change to log file
+      logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
 
     } else { 
       // status = running
@@ -539,14 +579,6 @@ char* promptmsg() {
 	return promptMessage;
 }
 
-void addToJobCollection(job_t* j){
-  
-  if(headOfJobCollection == NULL){
-    headOfJobCollection = j;
-  } 
-
-}
-
 // so we know what the job contains--TESTING NOT IMPORTANT:
 void printMyJobProcess(process_t * p){
   if(p == NULL){
@@ -586,22 +618,11 @@ void printMyJob(job_t* j){
 
 //-------------------------------------------------
 
-// create the log file path and name
-void registerCWD(){
-  char cwd[1024];
-  getcwd(cwd, sizeof(cwd));
-  fileDirectory = strcat(cwd,"/dsh.log");
-  logError(cwd);
-}
-
 int main() {
 	init_dsh();
   remove("dsh.log"); // clear log file when starting the shell
-  // fclose(fopen("dsh.log","a"));
-
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
-  // registerCWD();
 
 	while(1) {
     job_t *j = NULL;
@@ -620,14 +641,10 @@ int main() {
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
 
+      addToJobCollection(j);
       if(!builtin_cmd(j,argc,argv)){
-        // headOfJobCollection = NULL;
         // add the job to the collection of jobs
-        addToJobCollection(j);
         spawn_job(j,!(j->bg)); 
-      } else {
-        // add job change to log file
-        logStatus((long)j->first_process->pid, "Launched", j->commandinfo);
       }
 
       j = j->next;
