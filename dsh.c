@@ -4,12 +4,6 @@ void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for t
 void continue_job(job_t *j); /* resume a stopped job */
 void spawn_job(job_t *j, bool fg); /* spawn a new job */
 
-
-//-----erase when finish--------------------/
-void printMyJob(job_t *j);
-void printMyJobProcess(process_t*p);
-//-------------------------------------------/
-
 char* fileDirectory;
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
 job_t* firstJob;
@@ -598,45 +592,6 @@ char* promptmsg() {
   promptMessage = str;
 	return promptMessage;
 }
-
-// so we know what the job contains--TESTING NOT IMPORTANT:
-void printMyJobProcess(process_t * p){
-  if(p == NULL){
-    return;
-  }
-  while(p != NULL){
-    printf("This is my argc: %d\n This is my pid: %ld\n This is my Complete: %d\n This is my stopped: %d\n This is my status: %d \n This is my ifile: %s\n This is my ofile: %s\n",p->argc, (long)p->pid,p->completed,
-                                  p->stopped,p->status, p->ifile, p->ofile);
-    // for(int i =0; i < p->argc; i++){
-    //   printf("This is argv %d: %s\n",i,p->argv[i] );
-    // }
-
-    p = p->next;
-
-  }
-
-}
-
-void printMyJob(job_t* j){
-  if(j == NULL){
-    return;
-  }
-  job_t * current;
-  current = j;
-
-  while(current!=NULL){
-    printf("This is the commandinfo: %s\n This is my pgid: %ld\n This is notified: %d\n This is mystdin: %d\n This is mystdout: %d\n This is mystderr: %d\n This is bg: %d\n",current->commandinfo,(long)current->pgid, current->notified,
-                              current->mystdin, current->mystdout, current->mystderr, current->bg);
-    if(current->first_process!=NULL){
-      printMyJobProcess(current->first_process);
-    }else{
-      printf("This job's first process is NULL");
-    }
-    current = current->next;
-  }
-}
-
-//-------------------------------------------------
 
 int main() {
 	init_dsh();
