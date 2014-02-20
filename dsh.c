@@ -183,7 +183,7 @@ void checkStatus(job_t* j, process_t* p, int status){
   else if(WIFSTOPPED(status)== true){
     char str[100];
     sprintf(str, "The process has stopped due to this signal: %d\n", WSTOPSIG(status));
-    sprintf(str, "The current status is: %d", status);
+    //sprintf(str, "The current status is: %d", status);
     logError(str);
     // printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     // printf("this is the status: %d\n",status );
@@ -203,7 +203,7 @@ void checkStatus(job_t* j, process_t* p, int status){
     p->completed = true;
     char str[100];
     sprintf(str, "The process has terminated due to this signal: %d\n", WTERMSIG(status));
-    sprintf(str, "The current status is: %d", status);
+    //sprintf(str, "The current status is: %d", status);
     logError(str);
     // printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
     // printf("this is the status: %d\n",status );
@@ -402,40 +402,33 @@ void continue_job(job_t *j) {
 }
 
 void printJobCollection(){
-  int jobCounter = 1;
-
   job_t* current;
   current = headOfJobCollection;
 
-  job_t* temp = NULL;
+  job_t* last = NULL;
   job_t* toRelease = NULL;
 
-  if(current == NULL){
-    printf("There are not currently any jobs\n");
-    return;
-  }
+  bool noJobs = true;
 
   while(current != NULL){
-    printf("%s\n", current->first_process->argc);
-    if(strcmp("jobs", current->first_process->argv[0]) || strcmp("cd", current->first_process->argv[0]) || strcmp("fg", current->first_process->argv[0]) || strcmp("bg", current->first_process->argv[0])){
+    if(!strcmp("jobs", current->first_process->argv[0]) || !strcmp("cd", current->first_process->argv[0]) || !strcmp("fg", current->first_process->argv[0]) || !strcmp("bg", current->first_process->argv[0])){
       // delete this job from the job (linked) list
-      if (temp != NULL) {
-        temp->next = current->next;
-        toRelease = current;
+      if (last != NULL) {
+        last->next = current->next;
       } else {
-        toRelease = current;
-        headOfJobCollection= current->next;
+        headOfJobCollection = current->next;
       }
     } else if(job_is_completed(current)) { 
       // status = complete
-      printf("%d: (Job Number: %ld) %s (Complete)\n", jobCounter, (long)current->pgid, current->commandinfo);
+      printf("%ld (Completed): %s\n", (long)current->pgid, current->commandinfo);
+      noJobs = false;
       
       // add job change to log file
       logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
 
       // delete this job from the job (linked) list
-      if (temp != NULL) {
-        temp->next = current->next;
+      if (last != NULL) {
+        last->next = current->next;
         toRelease = current;
       } else {
         toRelease = current;
@@ -444,16 +437,18 @@ void printJobCollection(){
 
     } else if (job_is_stopped(current)){
       // status = stopped
-      printf("%d: (Job Number: %ld) %s (Stopped)\n", jobCounter, (long)current->pgid, current->commandinfo);
-      temp = current;
+      printf("%ld (Stopped): %s\n", (long)current->pgid, current->commandinfo);
+      last = current;
+      noJobs = false;
 
       // add job change to log file
       logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
 
     } else { 
       // status = running
-      printf("%d: (Job Number: %ld) %s (Running)\n", jobCounter, (long)current->pgid, current->commandinfo);
-      temp = current;
+      printf("%ld (Running): %s\n", (long)current->pgid, current->commandinfo);
+      last = current;
+      noJobs = false;
     }
 
     current = current->next;
@@ -463,8 +458,11 @@ void printJobCollection(){
       free(toRelease);
       toRelease = NULL;
     }
+  }
 
-    jobCounter ++;
+  if(noJobs){
+    printf("There are not currently any jobs\n");
+    return;
   }
 }
 
@@ -636,13 +634,14 @@ int main() {
 			continue; /* NOOP; user entered return or spaces with return */
 		}
 
+    addToJobCollection(j);
+
     // Loop through the jobs listed in the command line
     while(j != NULL){
       int argc = j->first_process->argc;
       char** argv = j->first_process->argv;
 
-      addToJobCollection(j);
-      if(!builtin_cmd(j,argc,argv)){
+      if(!builtin_cmd(j, argc, argv)){
         // add the job to the collection of jobs
         spawn_job(j,!(j->bg)); 
       }
