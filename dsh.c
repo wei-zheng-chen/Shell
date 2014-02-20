@@ -51,7 +51,7 @@ void logError(char* text) {
   // print error
   perror(text);
   // store completed entry in log
-  FILE* logfile = fopen(fileDirectory, "a");
+  FILE* logfile = fopen("dsh.log", "a");
   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
   fclose(logfile);
 }
@@ -267,12 +267,16 @@ void single_process(job_t *j, bool fg){
         while((cpid = waitpid(WAIT_ANY, &status, WUNTRACED))>0){
           p = findCurrentProcess(j, cpid);
           checkStatus(j, p, status);
+          if(job_is_stopped(j) && isatty(STDIN_FILENO)){
+             seize_tty(getpid());
+             break;
+           }
         }
       } // end if(fg)
   }
-  if(fg){
-    seize_tty(getpid()); // assign the terminal back to ds
-  }
+  // if(fg){
+  //   seize_tty(getpid()); // assign the terminal back to ds
+  // }
 }
 
 void pipeline_process(job_t * j, bool fg){
@@ -593,11 +597,11 @@ void registerCWD(){
 int main() {
 	init_dsh();
   remove("dsh.log"); // clear log file when starting the shell
-  fclose(fopen("dsh.log","a"));
+  // fclose(fopen("dsh.log","a"));
 
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
-  registerCWD();
+  // registerCWD();
 
 	while(1) {
     job_t *j = NULL;
