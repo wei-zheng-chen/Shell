@@ -10,9 +10,10 @@ void printMyJob(job_t *j);
 void printMyJobProcess(process_t*p);
 //-------------------------------------------/
 
+char* fileDirectory;
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
 job_t* firstJob;
-char* fileDirectory;
+
 
 
 /* Sets the process group id for a given job and process */
@@ -50,7 +51,7 @@ void logError(char* text) {
   // print error
   perror(text);
   // store completed entry in log
-  FILE* logfile = fopen("dsh.log", "a");
+  FILE* logfile = fopen(fileDirectory, "a");
   fprintf(logfile, "Error: (%s) %s\n", strerror(errno), text);
   fclose(logfile);
 }
@@ -582,16 +583,12 @@ void printMyJob(job_t* j){
 //-------------------------------------------------
 
 // create the log file path and name
-// void registerCWD(){
-//   char cwd[1024];
-//   getcwd(cwd, sizeof(cwd));
-// <<<<<<< HEAD
-//   fileDirectory = strcat(cwd,"/dsh.log");
-//   logError(cwd);
-// =======
-//   fileDirectory = strcat(cwd, "/dsh.log");
-// >>>>>>> dfff613deb000a9d05bdf2a06cfb1d1d3bb6bde3
-// }
+void registerCWD(){
+  char cwd[1024];
+  getcwd(cwd, sizeof(cwd));
+  fileDirectory = strcat(cwd,"/dsh.log");
+  logError(cwd);
+}
 
 int main() {
 	init_dsh();
@@ -600,7 +597,7 @@ int main() {
 
 	DEBUG("Successfully initialized\n");
   headOfJobCollection = NULL;
-  // registerCWD();
+  registerCWD();
 
 	while(1) {
     job_t *j = NULL;
