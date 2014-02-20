@@ -69,7 +69,9 @@ void logError(char* text) {
 // Status logging
 void logStatus(long pid, char* status, char* name){
   // print status
-  printf("%ld (%s): %s\n", pid, status, name);
+  if(strcmp("Completed", status)){
+    printf("%ld (%s): %s\n", pid, status, name);
+  }
   // store completed entry in log
   FILE* logfile = fopen("dsh.log", "a");
   fprintf(logfile, "%ld (%s): %s\n", pid, status, name);
@@ -275,8 +277,8 @@ void single_process(job_t *j, bool fg){
           p = findCurrentProcess(j, cpid);
           checkStatus(j, p, status);
           if(job_is_stopped(j) && isatty(STDIN_FILENO)){
-             seize_tty(getpid());
-             break;
+            seize_tty(getpid());
+            break;
            }
         }
       } // end if(fg)
