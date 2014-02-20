@@ -182,14 +182,15 @@ void checkStatus(job_t* j, process_t* p, int status){
   // check if its stopped by a signal
   else if(WIFSTOPPED(status)== true){
     char str[100];
-    sprintf(str, "The process has stopped due to this signal: %d\n", WSTOPSIG(status));
-    //sprintf(str, "The current status is: %d", status);
-    logError(str);
+    // sprintf(str, "The process has stopped due to this signal: %d\n", WSTOPSIG(status));
+    // //sprintf(str, "The current status is: %d", status);
+    // logError(str);
     // printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
     // printf("this is the status: %d\n",status );
     p->stopped = true;
     j->notified = true;
     j->bg = true;
+    p->completed = false;
   }
 
   // check if the signal told the process to continue again
@@ -202,14 +203,14 @@ void checkStatus(job_t* j, process_t* p, int status){
   else if(WIFSIGNALED(status)==true){
     p->completed = true;
     char str[100];
-    sprintf(str, "The process has terminated due to this signal: %d\n", WTERMSIG(status));
-    //sprintf(str, "The current status is: %d", status);
-    logError(str);
+    // sprintf(str, "The process has terminated due to this signal: %d\n", WTERMSIG(status));
+    // //sprintf(str, "The current status is: %d", status);
+    // logError(str);
     // printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
     // printf("this is the status: %d\n",status );
 
     if(WCOREDUMP(status) == true){
-      printf("child is taking a core dump\n");
+      logError("Child is taking a core dump\n");
     }
   }
 }
@@ -417,7 +418,17 @@ void printJobCollection(){
         last->next = current->next;
       } else {
         headOfJobCollection = current->next;
-      }
+      } 
+
+    } else if (job_is_stopped(current)){
+      // status = stopped
+      printf("%ld (Stopped): %s\n", (long)current->pgid, current->commandinfo);
+      last = current;
+      noJobs = false;
+
+      // add job change to log file
+      logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
+
     } else if(job_is_completed(current)) { 
       // status = complete
       printf("%ld (Completed): %s\n", (long)current->pgid, current->commandinfo);
@@ -434,15 +445,6 @@ void printJobCollection(){
         toRelease = current;
         headOfJobCollection= current->next;
       }
-
-    } else if (job_is_stopped(current)){
-      // status = stopped
-      printf("%ld (Stopped): %s\n", (long)current->pgid, current->commandinfo);
-      last = current;
-      noJobs = false;
-
-      // add job change to log file
-      logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
 
     } else { 
       // status = running
