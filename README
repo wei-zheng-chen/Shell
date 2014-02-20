@@ -8,15 +8,15 @@
 
 	Name1: Wei Chen
 	NetId1: wc82
-	Time spent: 20 hours
+	Time spent: 65 hours
 
 	Name2: Chelsea Wezensky
 	NetId2: clw33
-	Time spent: 20 hours
+	Time spent: 55 hours
 
 	Name3: William Johnston
 	NetId3: wpj2
-	Time spent: 20 hours
+	Time spent: 45 hours
 
 /******************
  * Files to submit
@@ -29,57 +29,134 @@
  * Implementation details
  *************************/
 
-/* 
- * This section should contain the implementation details and a overview of the
- * results. 
+While in main, we loop through the jobs that have just been entered in the 
+command line. If it is a built-in command (quit, cd, jobs, fg, bg), we handle 
+that command separately; no fork is necessary (processed in BUILTIN_CMD).
 
- * You are expected to provide a good README document including the
- * implementation details. In particular, you can use pseudocode to describe your
- * implementation details where necessary. However that does not mean to
- * copy/paste your C code. Specifically, you should summarize details corresponding 
- * to (1) multiple pipelines (2) job control (3) logging (3) .c commands 
- * compilation and execution. We expect the design and implementation details to 
- * be at most 1-2 pages.  A plain textfile is requested. 
+QUIT -- This is very simple; it just exist the program by calling EXIT.
 
- * In case of lab is limited in some functionality, you should provide the
- * details to maximize your partial credit.  
- * */
+CD -- It checks to enure that CHDIR is being passed a valid directory 
+and logs an error otherwise.
 
-While in main, we loop through the jobs that have just been entered in the command line. If it is a built-in command (quit, cd, jobs, fg, bg), we handle that command separately; no fork is necessary (processed in 
-BUILTIN_CMD).
-	quit -- very simple; just exit the program
-	jobs -- print the list of jobs being held in the global variable 
-	        linked list; if jobs are completed after being printed, then
-	        it cleans up the list and removes the completed jobs
-	cd   -- checks to ensure that chdir is being passed a valid directory;
-            logs an error otherwise
-    bg   -- 
-    fg   -- moves a background command to the foreground; supports moving
-            the last_job if there are no parameters, or moving the 
-            appropriate pgid number; if the pgid number is not valid (or is
-            not a number), the error is logged. If the job is stopped, mark
-            the first process as not stopped, check the signals from that 
-            process so that if it has exited, it is marked as completed.
+job control
 
-            ^^^^^ is this right???
+JOBS -- This prints the list of jobs being held in the global variable 
+linked list. If jobs are completed after being printed, then it cleans up the 
+list and removes the completed jobs.
+
+BG -- Yeah, started something, but didn't really continue it. Other things 
+came up; didn't error check, don't anticipate it working.
+
+FG -- This moves a background command to the foreground. It supports moving 
+the last_job (which is passed to it) if there are no parameters; otherwise it 
+moves the appropraite pgid number. If the pgid number is not valid (or is not 
+entered as a number), the error is logged. If the job is stopped, it marks the 
+first process as not stopped, checks the signals from that process so that if 
+it has exited, it is marked as completed.
+
+NOTE: FG works with a stopped infinite loop, but not with stopped "cat" -- we 
+had so many issues with "cat" and ended up having to deal with it as a special 
+case in some instances (please see below). Additionally, after resuming a 
+stopped job, the CTRL-Z no longer works, which was something that took forever 
+to fix for other situations as well. No ideas anymore.
 
 If it is not a built-in command, we add it to the job collection list and 
-spawn a new job (in SPAWN_JOB). A pipeline is created 
+spawn a new job (in SPAWN_JOB). If the job is a single job (aka, no 
+pipeline), it deals with this simple case on its own in SINGLE_PROCESS.
 
+After forking, the child establishes the pid and calls NEW_CHILD. It then 
+calls REDIRECTION to set up the programming environment (see below), checks 
+if it is a .c file and runs COMPILER if required (also below), and then 
+execs the command. We log if there was an issue (using LOGERROR, also below). 
+The parent waits on the child, then merges and seizes the tty back to the 
+parent shell.
 
+If there is a pipeline, it calls PIPELINE_PROCESS. Our code did not support 
+"cat" for most of this process; signal 21, which indicates that the STDIN of 
+cat was taking the terminal as input, made cat a background job. In order 
+for the pipeline to work in all other cases, we have to handle signals in such 
+a way that cat no longer works. To work around this, we devised a hack to 
+work around cat. If "cat" is the first process, then we handle that one case 
+in SINGLE_PROCESS and then continue with the rest of the cases while looping.
+
+While looping through the processes in the job, we first create a pipe object 
+and then fork. In the child process, rather than calling NEW_CHILD (which was 
+given to us), we modified our own and left it in SPAWN_JOB. Instead of 
+immediately seizing the tty as long as the program is in the foreground, we 
+add an additional if-statement to check if the job is stopped (since you 
+only have to give the job back if the job has stopped) and check that the 
+file descriptor STDIN is referring to the terminal (meaning that it needs
+the tty in order to proceed).
+
+multiple pipelines
+
+Then we look at three cases for pipelines. First, we consider if the process 
+is the first process in the job; in this case, we need to close the read 
+end of the pipe and copy the write end of the pipe to STDOUT. If the process 
+is instead in the middle, then the the output of the last pipe (saved in 
+"input") is copied into STDIN, the read end of the new pipe is closed, and 
+write end of the pipe is copied into STDOUT. The last case is if the process 
+is the last one in the pipeline, in which case it copies the output of the 
+last pipe (saved in "input") to STDIN and closes the read end of the pipe. 
+After dealing with the pipeline, the child calls REDIRECTION (below), COMPILER 
+if appropriate (also below), and execs. The parent sets up "input" to hold the 
+old pipe and waits for all of the children.
+
+redirection
+
+When ifile or ofile are not NULL, REDIRECTION calls INPUT and OUTPUT 
+respectively. Essentially, these methods open the file descriptor 
+pointing to the redirected file, check to ensure that it is a valid file 
+(logging if it is not), and copies the STDIN/STDOUT to point at the inputted 
+file descriptor (logging if dup2 fails). Close the file descriptor and return.
+
+Note: in the pipeline, dsh supports redirection (similar to the example shell 
+given to us). However, there are instances in which dsh does not operate in the 
+same way that a normal shell does, such as "ls > list.txt | echo | wc". This line 
+outputs "1 0 1" in both our shell and the example shell, but in the normal shell, 
+it does not run, and instead prints "Ambiguous output redirect."
+
+.c commands
+
+When there is a .c file that is not associated with a "gcc" argument, we 
+call COMPILER. Here, we set up the arguments required to execute with gcc. 
+After forking, the child executes the file, creating an executable file 
+named "devil." The parent waits on the child and merges. The arguments 
+for the next exec are constructed ("./devil"), the arguments from "gcc" were 
+freed, and the program returns.
+
+logging
+
+To log errors, we created a function LOGERROR that opens 
+the "dsh.log" file and includes the kernel's error information based on the 
+error number and the our notes (that are passed to LOGERROR). When we initial 
+the terminal, we remove "dsh.log" so that all of the notes are from the 
+latest shell. To store job status changes, we use LOGSTATUS that operates in a 
+similar manner.
 
 
 /************************
  * Feedback on the lab
  ************************/
 
+This lab was extremely frustrating. Even after finishing the program and writing 
+out how it worked here, I still don't know if I really understand why it works 
+now as opposed to any of the earlier (and there were many) iterations. 
+Essentially, it was a giant case of: http://imgur.com/x0ml8
 
+While the PDF included a lot of information, even after reading it (and the man 
+pages), we still didn't really know what was going on. It took a lot of reading 
+Piazza, trial and error, talking it out, reading more Piazza, crying in the 
+shower, and Googling everything before we could make heads or tails of it.
 
 
 /************************
  * References
  ************************/
 
-/*
- * List of collaborators involved including any online references/citations.
- * */
+Piazza 
+Joanna Kim (team mascot and cheerleader)
+Lecture slides and notes
+Textbook
+So many websites (afraid we didn't keep track of all of the man pages and 
+possible answers to questions throughout this process) 
