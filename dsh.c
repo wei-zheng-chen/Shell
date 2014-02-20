@@ -115,8 +115,6 @@ void compiler(job_t *j, process_t *p){
   int status =0;
   pid_t pid;
 
-  addToJobCollection(j);
-
   // if we wanted to compile each file so that the exec file is called
   // its own name (rather than always being called "devil"), use these lines:
   //    char* compileFileName = (char*) malloc(sizeof(char)*(strlen(p->argv[0])-2));
@@ -162,6 +160,7 @@ void compiler(job_t *j, process_t *p){
   // regular child when it returns
   sprintf(p->argv[0], "./%s", "devil"); //compileFileName);
   
+  addToJobCollection(j);
   // if we wanted the exec file to be the same as the .c file
   //    sprintf(p->argv[0], "./%s", compileFileName);
   //    free(compileFileName);
@@ -181,16 +180,9 @@ void checkStatus(job_t* j, process_t* p, int status){
 
   // check if its stopped by a signal
   else if(WIFSTOPPED(status)== true){
-    char str[100];
-    // sprintf(str, "The process has stopped due to this signal: %d\n", WSTOPSIG(status));
-    // //sprintf(str, "The current status is: %d", status);
-    // logError(str);
-    // printf("process is stopped, this is the signal that killed it: %d\n", WSTOPSIG(status));
-    // printf("this is the status: %d\n",status );
     p->stopped = true;
     j->notified = true;
     j->bg = true;
-    p->completed = false;
   }
 
   // check if the signal told the process to continue again
@@ -202,19 +194,12 @@ void checkStatus(job_t* j, process_t* p, int status){
   // Check if the child's process is terminated by the terminal
   else if(WIFSIGNALED(status)==true){
     p->completed = true;
-    char str[100];
-    // sprintf(str, "The process has terminated due to this signal: %d\n", WTERMSIG(status));
-    // //sprintf(str, "The current status is: %d", status);
-    // logError(str);
-    // printf( "this is the number of signal that cause this process to terminate: %d\n", WTERMSIG(status));
-    // printf("this is the status: %d\n",status );
 
     if(WCOREDUMP(status) == true){
       logError("Child is taking a core dump\n");
     }
   }
 }
-
 
 process_t* findCurrentProcess(job_t* j , pid_t pid){
   int innerWhileBreak = 0;
@@ -420,15 +405,6 @@ void printJobCollection(){
         headOfJobCollection = current->next;
       } 
 
-    } else if (job_is_stopped(current)){
-      // status = stopped
-      printf("%ld (Stopped): %s\n", (long)current->pgid, current->commandinfo);
-      last = current;
-      noJobs = false;
-
-      // add job change to log file
-      logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
-
     } else if(job_is_completed(current)) { 
       // status = complete
       printf("%ld (Completed): %s\n", (long)current->pgid, current->commandinfo);
@@ -445,6 +421,15 @@ void printJobCollection(){
         toRelease = current;
         headOfJobCollection= current->next;
       }
+
+    } else if (job_is_stopped(current)){
+      // status = stopped
+      printf("%ld (Stopped): %s\n", (long)current->pgid, current->commandinfo);
+      last = current;
+      noJobs = false;
+
+      // add job change to log file
+      logStatus((long)current->first_process->pid, "Completed", current->commandinfo);
 
     } else { 
       // status = running
@@ -493,7 +478,40 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv) {
   
   // Should it run in the background?
   } else if (!strcmp("bg", argv[0])) {
-    /* Your code here */
+    // resumes suspended job as bg
+    // if there's a parameter, that's the job that should be moved
+    // otherwise, grabs the most recently suspended job
+
+    job_t *j = last_job;
+    int pgid = j->pgid;
+
+    // need to overwrite with actual job information
+    if (argc > 1){
+      pgid = atoi(argv[1]); // get the pgid from the line
+      if(pgid == 0){
+        logError("No such pgid number");
+        return true;
+      }
+      // find the appropriate job in the job list
+      job_t *temp = headOfJobCollection;
+      while((temp != NULL) && (temp->pgid != pgid)){
+        temp = temp->next;
+      }
+      // that pgid number does not exist
+      if(temp == NULL){
+        logError("Job did not exist");
+        return true;
+      }
+      j = temp;
+    }
+
+    if(!j->bg){ // if already in the background, should be done
+      if(job_is_completed(j)){
+        j->bg = !j->bg;
+        continue_job(j);
+      }
+    }
+
     return true;
 
   // Should it run in the foreground?
