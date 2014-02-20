@@ -6,7 +6,6 @@ void spawn_job(job_t *j, bool fg); /* spawn a new job */
 
 char* fileDirectory;
 job_t* headOfJobCollection; //collection of jobs that are not the built-in commmands
-job_t* firstJob;
 
 void addToJobCollection(job_t* j){
   if(headOfJobCollection == NULL){
