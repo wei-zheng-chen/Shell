@@ -309,8 +309,9 @@ void pipeline_process(job_t * j, bool fg){
         p->pid = getpid();   
         set_child_pgid(j, p);
         // add job change to log file
-        logStatus((long)j->first_process->pid, "Launched", j->commandinfo);
-
+        if (j->first_process == p){
+          logStatus((long)j->first_process->pid, "Launched", j->commandinfo);
+        }
         if(fg){ // if fg is set
           if(job_is_stopped(j) && isatty(STDIN_FILENO)){
             seize_tty(j->pgid); // assign the terminal
